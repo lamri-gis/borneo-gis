@@ -23,62 +23,46 @@ class GpsProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> start() async {
-    // Cek apakah Location Service aktif di device
-    bool serviceEnabled = await _location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) {
-        _errorMessage = 'Layanan lokasi tidak aktif. Nyalakan GPS di pengaturan.';
-        notifyListeners();
-        return;
-      }
-    }
-
-    // Cek permission
-    PermissionStatus perm = await _location.hasPermission();
-    if (perm == PermissionStatus.denied) {
-      perm = await _location.requestPermission();
+    try {
+      final perm = await _location.requestPermission();
       if (perm != PermissionStatus.granted) {
-        _errorMessage = 'Izin lokasi ditolak. Buka Pengaturan > Aplikasi > BorneoGIS Navigator > Izin > Lokasi.';
+        _errorMessage = 'Izin lokasi ditolak.';
         notifyListeners();
         return;
       }
-    }
 
-    if (perm == PermissionStatus.deniedForever) {
-      _errorMessage = 'Izin lokasi diblokir permanen. Buka Pengaturan untuk mengaktifkan.';
-      notifyListeners();
-      return;
-    }
-
-    _hasPermission = true;
-    _errorMessage = null;
-
-    await _location.changeSettings(
-      accuracy: LocationAccuracy.high,
-      interval: 1000,
-      distanceFilter: 0.5,
-    );
-
-    _locationSub = _location.onLocationChanged.listen((loc) {
-      _current = GpsData(
-        latitude: loc.latitude ?? 0,
-        longitude: loc.longitude ?? 0,
-        altitude: loc.altitude ?? 0,
-        accuracy: loc.accuracy ?? 0,
-        speed: (loc.speed ?? 0) * 3.6,
-        heading: loc.heading ?? 0,
-        timestamp: DateTime.now(),
-      );
-      _isActive = true;
+      _hasPermission = true;
       _errorMessage = null;
-      notifyListeners();
-    });
 
-    _compassSub = FlutterCompass.events?.listen((event) {
-      _heading = event.heading ?? 0;
+      await _location.changeSettings(
+        accuracy: LocationAccuracy.high,
+        interval: 1000,
+        distanceFilter: 0.5,
+      );
+
+      _locationSub = _location.onLocationChanged.listen((loc) {
+        _current = GpsData(
+          latitude: loc.latitude ?? 0,
+          longitude: loc.longitude ?? 0,
+          altitude: loc.altitude ?? 0,
+          accuracy: loc.accuracy ?? 0,
+          speed: (loc.speed ?? 0) * 3.6,
+          heading: loc.heading ?? 0,
+          timestamp: DateTime.now(),
+        );
+        _isActive = true;
+        _errorMessage = null;
+        notifyListeners();
+      });
+
+      _compassSub = FlutterCompass.events?.listen((event) {
+        _heading = event.heading ?? 0;
+        notifyListeners();
+      });
+    } catch (e) {
+      _errorMessage = 'Error GPS: $e';
       notifyListeners();
-    });
+    }
   }
 
   void stop() {
