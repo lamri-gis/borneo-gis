@@ -8,90 +8,93 @@
   <img src="https://img.shields.io/badge/Offline-100%25-brightgreen" alt="Offline"/>
 </p>
 
-**BorneoGIS Navigator** adalah aplikasi pemetaan lapangan untuk Android yang dirancang khusus untuk kebutuhan survei dan pemetaan di lapangan. Dibangun dengan Flutter, aplikasi ini bekerja sepenuhnya **offline** tanpa membutuhkan koneksi internet.
-
-Dikembangkan oleh [Lamri, S.P.](https://lamri.vercel.app) — GIS Analyst & WebGIS Developer, Desa Susuk Dalam, Kec. Sandaran, Kab. Kutai Timur, Kalimantan Timur.
+🇬🇧 English | [🇮🇩 Bahasa Indonesia](README.id.md)
 
 ---
 
-## Tujuan & Manfaat
+**BorneoGIS Navigator** is an Android field mapping application designed for survey and spatial data collection in the field. Built with Flutter, it works entirely **offline** — no internet connection required.
 
-Aplikasi ini hadir sebagai solusi ringan dan gratis untuk petugas lapangan, surveyor, dan pengelola wilayah desa yang membutuhkan alat pemetaan sederhana namun andal tanpa bergantung pada koneksi internet atau perangkat GPS khusus.
-
-**Cocok digunakan untuk:**
-- Survey dan pemetaan lapangan kawasan desa
-- Pencatatan koordinat titik batas lahan
-- Rekam jalur patroli, transek, atau perjalanan lapangan
-- Verifikasi koordinat lokasi di lapangan
-- Pengelolaan data spasial sederhana tanpa GIS desktop
+Developed by [Lamri, S.P.](https://lamri.vercel.app) — GIS Analyst & WebGIS Developer, Susuk Dalam Village, Sandaran, East Kutai, East Kalimantan, Indonesia.
 
 ---
 
-## Fitur
+## Purpose & Use Cases
 
-### GPS & Navigasi
-- Tampilan koordinat GPS real-time dalam format **Lat/Lon** dan **UTM WGS84**
-- Informasi elevasi, heading, kecepatan, dan akurasi sinyal GPS
-- Kompas digital terintegrasi
+A lightweight, free alternative to commercial field GIS apps for village officers, field surveyors, and land managers who need reliable mapping tools without internet dependency or specialized GPS hardware.
 
-### Peta Interaktif
-- Kanvas peta dengan gesture **pan & zoom**
-- Grid jarak otomatis menyesuaikan skala
-- Crosshair tengah layar untuk presisi
+**Ideal for:**
+- Village boundary and land parcel surveys
+- Field waypoint and coordinate recording
+- Patrol route, transect, and trail tracking
+- On-site coordinate verification
+- Basic spatial data collection without a GIS desktop
 
-### Marking & Anotasi
-- Pasang **pin** di posisi GPS saat ini atau input koordinat manual
-- Input koordinat dalam format **Lat/Lon** maupun **UTM** (dengan konversi otomatis)
-- Buat **lingkaran radius** multi-ring dari titik manapun (satuan meter atau kilometer)
-- Label nama untuk setiap pin dan radius
+---
+
+## Features
+
+### GPS & Navigation
+- Real-time GPS coordinates in **Lat/Lon** and **UTM WGS84**
+- Elevation, heading, speed, and accuracy display
+- Integrated digital compass
+
+### Interactive Map
+- Touch-based **pan & zoom** map canvas
+- Auto-scaling distance grid
+- Center crosshair for precision
+
+### Marking & Annotation
+- Drop a **pin** at current GPS position or enter coordinates manually
+- Coordinate input in **Lat/Lon** or **UTM** format with automatic conversion
+- Multi-ring **radius circles** from any point (meters or kilometers)
+- Custom labels for pins and radius circles
 
 ### Track Recording
-- Rekam **jalur perjalanan** lapangan secara real-time
-- Tampilan jumlah titik dan total jarak selama perekaman
-- Simpan otomatis ke file **GPX**
+- Real-time **track recording** of field routes
+- Live display of point count and total distance
+- Auto-save to **GPX** file
 
 ### Import & Export
+
 | Format | Import | Export |
 |--------|--------|--------|
 | GPX | ✅ | ✅ |
 | KML | ✅ | ✅ |
 | GeoJSON | — | ✅ |
 
-- Import file KML/GPX sebagai overlay di peta
-- Export pin ke GPX, KML, atau GeoJSON
-- Export track ke GPX atau KML
-
 ---
 
 ## Download
 
-**[⬇ Download APK Terbaru](../../releases/latest)**
+**[⬇ Download Latest APK](../../releases/latest)**
 
-Install langsung di Android:
-1. Download file `.apk` dari link di atas
-2. Buka file di HP Android
-3. Izinkan install dari sumber tidak dikenal jika diminta
-4. Buka aplikasi dan izinkan akses lokasi
+### Install on Android
+1. Download the `.apk` file from the link above
+2. Open the file on your Android device
+3. Allow installation from unknown sources if prompted
+4. Open the app and grant location permission
 
-> Diuji pada Android 10+. Membutuhkan izin akses lokasi (GPS).
-
----
-
-## Stack Teknologi
-
-- **Flutter** 3.29 — Android only
-- **Provider** — state management
-- **Location** — GPS stream
-- **Flutter Compass** — sensor kompas
-- **File Picker** — import KML/GPX
-- **Path Provider** — penyimpanan file
-- **XML** — parsing KML/GPX
-- **Shared Preferences** — persistensi data pin & radius
-- **UUID** — identifikasi objek unik
+> Tested on Android 10+. Requires location (GPS) permission.
 
 ---
 
-## Build dari Source
+## Tech Stack
+
+| Package | Purpose |
+|---------|---------|
+| Flutter 3.29 | Framework (Android only) |
+| provider | State management |
+| location | GPS stream |
+| flutter_compass | Compass sensor |
+| file_picker | KML/GPX import |
+| path_provider | File storage |
+| xml | KML/GPX parsing |
+| shared_preferences | Pin & radius persistence |
+| uuid | Unique object IDs |
+
+---
+
+## Build from Source
 
 ```bash
 git clone https://github.com/lamri-gis/borneo-gis.git
@@ -100,10 +103,10 @@ flutter pub get
 flutter build apk --release
 ```
 
-Untuk build signed APK, lihat konfigurasi di `.github/workflows/build.yml`.
+For signed APK build, see `.github/workflows/build.yml`.
 
 ---
 
-## Lisensi
+## License
 
 MIT License — © [Lamri, S.P.](https://lamri.vercel.app)
