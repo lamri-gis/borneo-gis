@@ -59,6 +59,36 @@ class _MainScreenState extends State<MainScreen> {
                     onLongPress: (lat, lon) => _showPinDialog(context, lat, lon),
                   ),
                   const Center(child: _Crosshair()),
+                  // Banner error GPS
+                  Consumer<GpsProvider>(builder: (_, gps, __) {
+                    if (gps.errorMessage == null) return const SizedBox.shrink();
+                    return Positioned(
+                      top: 0, left: 0, right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        color: AppColors.error.withOpacity(0.92),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_off, color: Colors.white, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                gps.errorMessage!,
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => context.read<GpsProvider>().start(),
+                              child: const Text(
+                                'Coba Lagi',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
                   Positioned(
                     top: 12,
                     right: 12,
