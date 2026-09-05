@@ -24,7 +24,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   bool _isTracking = false;
-  final GlobalKey _mapKey = GlobalKey();
+  final MapCanvasController _mapController = MapCanvasController();
 
   @override
   void initState() {
@@ -39,7 +39,6 @@ class _MainScreenState extends State<MainScreen> {
     final gps = context.watch<GpsProvider>();
     final track = context.watch<TrackProvider>();
 
-    // Tambah track point saat GPS update
     if (track.isRecording && gps.current != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         track.addPoint(gps.current!);
@@ -51,44 +50,31 @@ class _MainScreenState extends State<MainScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // AppBar custom
             _buildAppBar(context, gps, track),
-            // Map area
             Expanded(
               child: Stack(
                 children: [
-                  // Basemap canvas
                   MapCanvas(
-                    key: _mapKey,
+                    controller: _mapController,
                     onLongPress: (lat, lon) => _showPinDialog(context, lat, lon),
                   ),
-
-                  // Crosshair
                   const Center(child: _Crosshair()),
-
-                  // Compass
                   Positioned(
                     top: 12,
                     right: 12,
                     child: CompassWidget(heading: gps.heading),
                   ),
-
-                  // Track indicator
                   if (track.isRecording)
                     Positioned(
                       top: 12,
                       left: 12,
                       child: _TrackingIndicator(track: track),
                     ),
-
-                  // Zoom buttons
                   Positioned(
                     right: 12,
                     bottom: 12,
-                    child: _ZoomButtons(mapKey: _mapKey),
+                    child: _ZoomButtons(controller: _mapController),
                   ),
-
-                  // FAB actions
                   Positioned(
                     left: 12,
                     bottom: 12,
@@ -104,7 +90,6 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
-            // GPS Panel
             const GpsPanel(),
           ],
         ),
@@ -136,10 +121,7 @@ class _MainScreenState extends State<MainScreen> {
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.my_location, color: AppColors.textPrimary, size: 20),
-            onPressed: () {
-              final state = _mapKey.currentState;
-              if (state is _MapCanvasState) state.centerToGps();
-            },
+            onPressed: () => _mapController.centerToGps(),
             tooltip: 'Ke lokasi GPS',
           ),
           IconButton(
@@ -249,16 +231,13 @@ class _MainScreenState extends State<MainScreen> {
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
     if (path == null) return;
-
     final parsed = await KmlGpxParser.parse(path);
     if (parsed == null) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal baca file')));
       return;
     }
-
     final map = context.read<MapProvider>();
     for (final pin in parsed.pins) map.addPin(pin);
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Import: ${parsed.pins.length} pin, ${parsed.tracks.length} track')),
@@ -337,7 +316,7 @@ class _MainScreenState extends State<MainScreen> {
             ...map.circles.map((c) => ListTile(
               leading: Icon(Icons.radio_button_unchecked, color: c.color),
               title: Text(c.label.isEmpty ? 'Radius' : c.label, style: const TextStyle(color: AppColors.textPrimary)),
-              subtitle: Text('${c.radii.map((r) => r >= 1000 ? '${(r / 1000).toStringAsFixed(1)}km' : '${r.toStringAsFixed(0)}m').join(', ')}',
+              subtitle: Text(c.radii.map((r) => r >= 1000 ? '${(r / 1000).toStringAsFixed(1)}km' : '${r.toStringAsFixed(0)}m').join(', '),
                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
               trailing: IconButton(
                 icon: const Icon(Icons.delete, color: AppColors.error, size: 18),
@@ -414,23 +393,17 @@ class _TrackingIndicator extends StatelessWidget {
 }
 
 class _ZoomButtons extends StatelessWidget {
-  final GlobalKey mapKey;
-  const _ZoomButtons({required this.mapKey});
+  final MapCanvasController controller;
+  const _ZoomButtons({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ZoomBtn(icon: Icons.add, onTap: () {
-          final state = mapKey.currentState;
-          if (state is _MapCanvasState) state.zoomIn();
-        }),
+        _ZoomBtn(icon: Icons.add, onTap: () => controller.zoomIn()),
         const SizedBox(height: 4),
-        _ZoomBtn(icon: Icons.remove, onTap: () {
-          final state = mapKey.currentState;
-          if (state is _MapCanvasState) state.zoomOut();
-        }),
+        _ZoomBtn(icon: Icons.remove, onTap: () => controller.zoomOut()),
       ],
     );
   }

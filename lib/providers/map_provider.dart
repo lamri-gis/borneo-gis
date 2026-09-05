@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_models.dart';
@@ -10,12 +11,10 @@ class MapProvider extends ChangeNotifier {
   List<RadiusCircle> _circles = [];
   List<MapOverlay> _overlays = [];
 
-  // Viewport state
   double _scale = 1.0;
   double _offsetX = 0;
   double _offsetY = 0;
 
-  // Meter per pixel pada scale 1.0
   static const double _baseMetersPerPixel = 10.0;
 
   List<MapPin> get pins => _pins;
@@ -28,8 +27,6 @@ class MapProvider extends ChangeNotifier {
 
   MapProvider() { _load(); }
 
-  // Konversi lat/lon ke pixel relatif dari center layar
-  // Center layar = posisi GPS saat ini
   Offset latLonToPixel(double lat, double lon, GpsData center, double screenW, double screenH) {
     const metersPerDeg = 111319.9;
     final dLat = lat - center.latitude;
@@ -41,7 +38,6 @@ class MapProvider extends ChangeNotifier {
     return Offset(px, py);
   }
 
-  // Konversi pixel ke lat/lon
   GpsData pixelToLatLon(double px, double py, GpsData center, double screenW, double screenH) {
     const metersPerDeg = 111319.9;
     final dx = ((px - screenW / 2 - _offsetX) / _scale) * _baseMetersPerPixel;
@@ -53,12 +49,7 @@ class MapProvider extends ChangeNotifier {
 
   double _cosLat(double lat) {
     const pi = 3.14159265358979;
-    return _cos(lat * pi / 180);
-  }
-
-  double _cos(double x) {
-    // Simple cos approximation — gunakan dart:math di production
-    return math.cos(x);
+    return math.cos(lat * pi / 180);
   }
 
   void updateTransform(double scale, double dx, double dy) {
@@ -80,7 +71,6 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // PIN
   void addPin(MapPin pin) {
     _pins.add(pin);
     _save();
@@ -93,7 +83,6 @@ class MapProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // RADIUS
   void addCircle(RadiusCircle circle) {
     _circles.add(circle);
     _save();
@@ -115,7 +104,6 @@ class MapProvider extends ChangeNotifier {
     }
   }
 
-  // OVERLAY
   void addOverlay(MapOverlay overlay) {
     _overlays.add(overlay);
     notifyListeners();
