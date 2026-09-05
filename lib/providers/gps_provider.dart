@@ -13,17 +13,46 @@ class GpsProvider extends ChangeNotifier {
   double _heading = 0;
   bool _isActive = false;
   bool _hasPermission = false;
+  String? _errorMessage;
 
   GpsData? get current => _current;
   double get heading => _heading;
   bool get isActive => _isActive;
   bool get hasPermission => _hasPermission;
   bool get hasPosition => _current != null;
+  String? get errorMessage => _errorMessage;
 
   Future<void> start() async {
-    final perm = await _location.requestPermission();
-    if (perm != PermissionStatus.granted) return;
+    // Cek apakah Location Service aktif di device
+    bool serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) {
+        _errorMessage = 'Layanan lokasi tidak aktif. Nyalakan GPS di pengaturan.';
+        notifyListeners();
+        return;
+      }
+    }
+
+    // Cek permission
+    PermissionStatus perm = await _location.hasPermission();
+    if (perm == PermissionStatus.denied) {
+      perm = await _location.requestPermission();
+      if (perm != PermissionStatus.granted) {
+        _errorMessage = 'Izin lokasi ditolak. Buka Pengaturan > Aplikasi > BorneoGIS Navigator > Izin > Lokasi.';
+        notifyListeners();
+        return;
+      }
+    }
+
+    if (perm == PermissionStatus.deniedForever) {
+      _errorMessage = 'Izin lokasi diblokir permanen. Buka Pengaturan untuk mengaktifkan.';
+      notifyListeners();
+      return;
+    }
+
     _hasPermission = true;
+    _errorMessage = null;
 
     await _location.changeSettings(
       accuracy: LocationAccuracy.high,
@@ -37,11 +66,12 @@ class GpsProvider extends ChangeNotifier {
         longitude: loc.longitude ?? 0,
         altitude: loc.altitude ?? 0,
         accuracy: loc.accuracy ?? 0,
-        speed: (loc.speed ?? 0) * 3.6, // m/s ke km/h
+        speed: (loc.speed ?? 0) * 3.6,
         heading: loc.heading ?? 0,
         timestamp: DateTime.now(),
       );
       _isActive = true;
+      _errorMessage = null;
       notifyListeners();
     });
 
