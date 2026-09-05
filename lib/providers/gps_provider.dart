@@ -34,6 +34,8 @@ class GpsProvider extends ChangeNotifier {
       _hasPermission = true;
       _errorMessage = null;
 
+      await _location.enableBackgroundMode(enable: false);
+
       await _location.changeSettings(
         accuracy: LocationAccuracy.high,
         interval: 1000,
