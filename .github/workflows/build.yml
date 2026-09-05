@@ -49,8 +49,17 @@ jobs:
         with:
           name: BorneoGIS-Navigator-APK
           path: build/app/outputs/flutter-apk/BorneoGIS-Navigator-*.apk
+      - name: Update Latest Build release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest-build
+          name: "BorneoGIS Navigator — Latest Build"
+          body: "APK terbaru dari branch main. Otomatis diperbarui setiap ada perubahan."
+          prerelease: true
+          files: build/app/outputs/flutter-apk/BorneoGIS-Navigator-*.apk
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: build/app/outputs/flutter-apk/BorneoGIS-Navigator-*.apk
