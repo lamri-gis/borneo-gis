@@ -24,8 +24,14 @@ class GpsProvider extends ChangeNotifier {
 
   Future<void> start() async {
     try {
-      final perm = await _location.requestPermission();
-      if (perm != PermissionStatus.granted) {
+      // Cek dulu, kalau sudah granted tidak perlu request lagi
+      PermissionStatus perm = await _location.hasPermission();
+      if (perm == PermissionStatus.denied) {
+        perm = await _location.requestPermission();
+      }
+
+      if (perm != PermissionStatus.granted &&
+          perm != PermissionStatus.grantedLimited) {
         _errorMessage = 'Izin lokasi ditolak.';
         notifyListeners();
         return;
@@ -33,8 +39,6 @@ class GpsProvider extends ChangeNotifier {
 
       _hasPermission = true;
       _errorMessage = null;
-
-      await _location.enableBackgroundMode(enable: false);
 
       await _location.changeSettings(
         accuracy: LocationAccuracy.high,
