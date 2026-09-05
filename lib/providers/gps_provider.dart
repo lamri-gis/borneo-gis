@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:location/location.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../models/gps_data.dart';
 
 class GpsProvider extends ChangeNotifier {
-  final Location _location = Location();
-  StreamSubscription? _locationSub;
+  StreamSubscription<Position>? _locationSub;
   StreamSubscription? _compassSub;
 
   GpsData? _current;
@@ -24,15 +23,25 @@ class GpsProvider extends ChangeNotifier {
 
   Future<void> start() async {
     try {
-      // Cek dulu, kalau sudah granted tidak perlu request lagi
-      PermissionStatus perm = await _location.hasPermission();
-      if (perm == PermissionStatus.denied) {
-        perm = await _location.requestPermission();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _errorMessage = 'Layanan lokasi tidak aktif. Nyalakan GPS di pengaturan.';
+        notifyListeners();
+        return;
       }
 
-      if (perm != PermissionStatus.granted &&
-          perm != PermissionStatus.grantedLimited) {
-        _errorMessage = 'Izin lokasi ditolak.';
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied) {
+          _errorMessage = 'Izin lokasi ditolak.';
+          notifyListeners();
+          return;
+        }
+      }
+
+      if (perm == LocationPermission.deniedForever) {
+        _errorMessage = 'Izin lokasi diblokir. Buka Pengaturan untuk mengaktifkan.';
         notifyListeners();
         return;
       }
@@ -40,21 +49,20 @@ class GpsProvider extends ChangeNotifier {
       _hasPermission = true;
       _errorMessage = null;
 
-      await _location.changeSettings(
+      const settings = LocationSettings(
         accuracy: LocationAccuracy.high,
-        interval: 1000,
-        distanceFilter: 0.5,
+        distanceFilter: 1,
       );
 
-      _locationSub = _location.onLocationChanged.listen((loc) {
+      _locationSub = Geolocator.getPositionStream(locationSettings: settings).listen((pos) {
         _current = GpsData(
-          latitude: loc.latitude ?? 0,
-          longitude: loc.longitude ?? 0,
-          altitude: loc.altitude ?? 0,
-          accuracy: loc.accuracy ?? 0,
-          speed: (loc.speed ?? 0) * 3.6,
-          heading: loc.heading ?? 0,
-          timestamp: DateTime.now(),
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          altitude: pos.altitude,
+          accuracy: pos.accuracy,
+          speed: pos.speed * 3.6,
+          heading: pos.heading,
+          timestamp: pos.timestamp,
         );
         _isActive = true;
         _errorMessage = null;
