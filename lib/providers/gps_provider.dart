@@ -9,12 +9,14 @@ class GpsProvider extends ChangeNotifier {
   StreamSubscription? _compassSub;
 
   GpsData? _current;
+  GpsData? _firstFix; // GPS pertama dapat sinyal
   double _heading = 0;
   bool _isActive = false;
   bool _hasPermission = false;
   String? _errorMessage;
 
   GpsData? get current => _current;
+  GpsData? get firstFix => _firstFix;
   double get heading => _heading;
   bool get isActive => _isActive;
   bool get hasPermission => _hasPermission;
@@ -49,13 +51,15 @@ class GpsProvider extends ChangeNotifier {
       _hasPermission = true;
       _errorMessage = null;
 
-      const settings = LocationSettings(
+      const settings = AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 1,
+        intervalDuration: Duration(milliseconds: 500),
+        distanceFilter: 0,
+        forceLocationManager: false,
       );
 
       _locationSub = Geolocator.getPositionStream(locationSettings: settings).listen((pos) {
-        _current = GpsData(
+        final data = GpsData(
           latitude: pos.latitude,
           longitude: pos.longitude,
           altitude: pos.altitude,
@@ -64,6 +68,8 @@ class GpsProvider extends ChangeNotifier {
           heading: pos.heading,
           timestamp: pos.timestamp,
         );
+        _current = data;
+        _firstFix ??= data; // simpan GPS pertama dapat sinyal
         _isActive = true;
         _errorMessage = null;
         notifyListeners();
