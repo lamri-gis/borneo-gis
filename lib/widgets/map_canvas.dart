@@ -13,6 +13,7 @@ class MapCanvasController {
   void zoomIn() => _state?.zoomIn();
   void zoomOut() => _state?.zoomOut();
   void centerToGps() => _state?.centerToGps();
+  double get gridInterval => _state?._currentGridInterval ?? 100;
 }
 
 class MapCanvas extends StatefulWidget {
@@ -35,6 +36,10 @@ class _MapCanvasState extends State<MapCanvas> {
   double _startOffY = 0;
   Offset? _focalStart;
   bool _autocentered = false;
+  double _currentGridInterval = 100;
+
+  // Daftar interval grid dalam meter
+  static const List<double> _gridSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
 
   @override
   void initState() {
@@ -77,6 +82,22 @@ class _MapCanvasState extends State<MapCanvas> {
     });
   }
 
+  // Pilih interval grid terbaik berdasarkan skala
+  double _calcGridInterval() {
+    const base = 10.0;
+    for (final step in _gridSteps.reversed) {
+      final px = (step / base) * _scale;
+      if (px >= 60) return step; // minimal 60px antar garis
+    }
+    return _gridSteps.last;
+  }
+
+  String _formatGridLabel(double meters) {
+    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(0)} km';
+    if (meters == meters.toInt()) return '${meters.toInt()} m';
+    return '$meters m';
+  }
+
   @override
   Widget build(BuildContext context) {
     final gps = context.watch<GpsProvider>();
@@ -88,6 +109,8 @@ class _MapCanvasState extends State<MapCanvas> {
       _autocentered = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => centerToGps());
     }
+
+    _currentGridInterval = _calcGridInterval();
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -104,6 +127,7 @@ class _MapCanvasState extends State<MapCanvas> {
             _offsetX = _startOffX + d.localFocalPoint.dx - _focalStart!.dx;
             _offsetY = _startOffY + d.localFocalPoint.dy - _focalStart!.dy;
           }
+          _currentGridInterval = _calcGridInterval();
         });
       },
       onTap: widget.onTap,
@@ -130,6 +154,7 @@ class _MapCanvasState extends State<MapCanvas> {
           offsetY: _offsetY,
           screenW: size.width,
           screenH: size.height,
+          gridInterval: _currentGridInterval,
         ),
       ),
     );
@@ -158,6 +183,7 @@ class _MapPainter extends CustomPainter {
   final double offsetY;
   final double screenW;
   final double screenH;
+  final double gridInterval;
 
   static const double _base = 10.0;
   static const double _mPerDeg = 111319.9;
@@ -174,6 +200,7 @@ class _MapPainter extends CustomPainter {
     required this.offsetY,
     required this.screenW,
     required this.screenH,
+    required this.gridInterval,
   });
 
   GpsData get _ref => firstFix ?? gpsData!;
@@ -191,12 +218,17 @@ class _MapPainter extends CustomPainter {
 
   double _metersToPixels(double meters) => (meters / _base) * scale;
 
+  String _formatGridLabel(double meters) {
+    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(0)} km';
+    if (meters == meters.toInt()) return '${meters.toInt()} m';
+    return '$meters m';
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    // Pakai AppColors.surface sebagai background peta (hijau gelap)
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = AppColors.surface,
+      Paint()..color = AppColors.mapBackground,
     );
     _drawGrid(canvas, size);
     if (gpsData == null) return;
@@ -210,13 +242,14 @@ class _MapPainter extends CustomPainter {
     _drawPins(canvas);
     final gpsScreen = _toScreen(gpsData!.latitude, gpsData!.longitude);
     _drawGpsMarker(canvas, gpsScreen);
+    _drawGridLabel(canvas, size);
   }
 
   void _drawGrid(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = AppColors.gridLine
       ..strokeWidth = 0.5;
-    final spacing = _metersToPixels(100);
+    final spacing = _metersToPixels(gridInterval);
     if (spacing < 20) return;
     final cx = screenW / 2 + offsetX;
     final cy = screenH / 2 + offsetY;
@@ -230,6 +263,34 @@ class _MapPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
       y += spacing;
     }
+  }
+
+  void _drawGridLabel(Canvas canvas, Size size) {
+    final label = '⊞ ${_formatGridLabel(gridInterval)}';
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    const padding = 8.0;
+    final x = padding;
+    final y = size.height - tp.height - padding;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(x - 4, y - 3, tp.width + 8, tp.height + 6),
+        const Radius.circular(4),
+      ),
+      Paint()..color = Colors.black.withOpacity(0.4),
+    );
+    tp.paint(canvas, Offset(x, y));
   }
 
   void _drawCircles(Canvas canvas) {
