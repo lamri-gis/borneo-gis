@@ -79,10 +79,8 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                             TextButton(
                               onPressed: () => context.read<GpsProvider>().start(),
-                              child: const Text(
-                                'Coba Lagi',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
+                              child: const Text('Coba Lagi',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
@@ -120,7 +118,12 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
-            const GpsPanel(),
+            // Pass gridInterval dari mapController ke GpsPanel
+            StatefulBuilder(
+              builder: (_, setState) => GpsPanel(
+                gridInterval: _mapController.gridInterval,
+              ),
+            ),
           ],
         ),
       ),
