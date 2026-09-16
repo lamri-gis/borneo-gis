@@ -39,7 +39,7 @@ class _MapCanvasState extends State<MapCanvas> {
   double _currentGridInterval = 100;
 
   // Daftar interval grid dalam meter
-  static const List<double> _gridSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+  static const List<double> _gridSteps = [1, 10, 100, 1000];
 
   @override
   void initState() {
@@ -85,9 +85,10 @@ class _MapCanvasState extends State<MapCanvas> {
   // Pilih interval grid terbaik berdasarkan skala
   double _calcGridInterval() {
     const base = 10.0;
-    for (final step in _gridSteps.reversed) {
+    // Cari interval terkecil yang spacing-nya >= 60px
+    for (final step in _gridSteps) {
       final px = (step / base) * _scale;
-      if (px >= 60) return step; // minimal 60px antar garis
+      if (px >= 60) return step;
     }
     return _gridSteps.last;
   }
