@@ -34,7 +34,7 @@ class _MapCanvasState extends State<MapCanvas> {
   double _startOffX = 0;
   double _startOffY = 0;
   Offset? _focalStart;
-  bool _autocentered = false; // flag auto-center saat GPS pertama dapat sinyal
+  bool _autocentered = false;
 
   @override
   void initState() {
@@ -63,7 +63,6 @@ class _MapCanvasState extends State<MapCanvas> {
       setState(() { _offsetX = 0; _offsetY = 0; });
       return;
     }
-    // Hitung offset dari firstFix ke current GPS
     final current = gps.current!;
     final first = gps.firstFix!;
     const base = 10.0;
@@ -85,7 +84,6 @@ class _MapCanvasState extends State<MapCanvas> {
     final track = context.watch<TrackProvider>();
     final size = MediaQuery.of(context).size;
 
-    // Auto-center saat GPS pertama dapat sinyal
     if (gps.current != null && !_autocentered) {
       _autocentered = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => centerToGps());
@@ -195,9 +193,10 @@ class _MapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Pakai AppColors.surface sebagai background peta (hijau gelap)
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = AppColors.mapBackground,
+      Paint()..color = AppColors.surface,
     );
     _drawGrid(canvas, size);
     if (gpsData == null) return;
@@ -209,7 +208,6 @@ class _MapPainter extends CustomPainter {
       _drawTrackPoints(canvas, trackPoints, AppColors.trackLine);
     }
     _drawPins(canvas);
-    // GPS marker di posisi GPS sekarang
     final gpsScreen = _toScreen(gpsData!.latitude, gpsData!.longitude);
     _drawGpsMarker(canvas, gpsScreen);
   }
@@ -269,8 +267,7 @@ class _MapPainter extends CustomPainter {
   void _drawPins(Canvas canvas) {
     for (final pin in pins) {
       final pos = _toScreen(pin.latitude, pin.longitude);
-      final paint = Paint()..color = pin.color;
-      canvas.drawCircle(pos, 8, paint);
+      canvas.drawCircle(pos, 8, Paint()..color = pin.color);
       canvas.drawCircle(pos, 8,
           Paint()..color = Colors.white..strokeWidth = 1.5..style = PaintingStyle.stroke);
       if (pin.label.isNotEmpty) {
