@@ -5,7 +5,8 @@ import '../models/gps_data.dart';
 import '../theme/app_theme.dart';
 
 class GpsPanel extends StatefulWidget {
-  const GpsPanel({super.key});
+  final double gridInterval;
+  const GpsPanel({super.key, this.gridInterval = 100});
 
   @override
   State<GpsPanel> createState() => _GpsPanelState();
@@ -13,6 +14,11 @@ class GpsPanel extends StatefulWidget {
 
 class _GpsPanelState extends State<GpsPanel> {
   bool _expanded = false;
+
+  String _formatGridLabel(double meters) {
+    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(0)} km';
+    return '${meters.toInt()} m';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,12 +45,28 @@ class _GpsPanelState extends State<GpsPanel> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
+                    // Label grid interval
                     Container(
-                      width: 40,
-                      height: 3,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.grid_on, color: AppColors.textSecondary, size: 11),
+                          const SizedBox(width: 3),
+                          Text(
+                            _formatGridLabel(widget.gridInterval),
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const Spacer(),
