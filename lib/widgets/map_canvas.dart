@@ -243,7 +243,6 @@ class _MapPainter extends CustomPainter {
     _drawPins(canvas);
     final gpsScreen = _toScreen(gpsData!.latitude, gpsData!.longitude);
     _drawGpsMarker(canvas, gpsScreen);
-    _drawGridLabel(canvas, size);
   }
 
   void _drawGrid(Canvas canvas, Size size) {
