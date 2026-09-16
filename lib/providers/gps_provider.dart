@@ -13,6 +13,7 @@ class GpsProvider extends ChangeNotifier {
   double _heading = 0;
   bool _isActive = false;
   bool _hasPermission = false;
+  bool _hasCompass = false;
   String? _errorMessage;
 
   GpsData? get current => _current;
@@ -21,6 +22,7 @@ class GpsProvider extends ChangeNotifier {
   bool get isActive => _isActive;
   bool get hasPermission => _hasPermission;
   bool get hasPosition => _current != null;
+  bool get hasCompass => _hasCompass;
   String? get errorMessage => _errorMessage;
 
   Future<void> start() async {
@@ -75,10 +77,24 @@ class GpsProvider extends ChangeNotifier {
         notifyListeners();
       });
 
+      // Subscribe kompas dulu
       _compassSub = FlutterCompass.events?.listen((event) {
-        _heading = event.heading ?? 0;
-        notifyListeners();
+        if (event.heading != null) {
+          if (!_hasCompass) {
+            _hasCompass = true;
+            notifyListeners();
+          }
+          _heading = event.heading!;
+          notifyListeners();
+        }
       });
+
+      // Tunggu 2 detik -- kalau belum detect kompas, cancel subscription
+      await Future.delayed(const Duration(seconds: 2));
+      if (!_hasCompass) {
+        _compassSub?.cancel();
+        _compassSub = null;
+      }
     } catch (e) {
       _errorMessage = 'Error GPS: $e';
       notifyListeners();
