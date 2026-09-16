@@ -116,19 +116,17 @@ class _MapCanvasState extends State<MapCanvas> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onScaleStart: (d) {
-        _baseScale = _scale;
         _startOffX = _offsetX;
         _startOffY = _offsetY;
         _focalStart = d.localFocalPoint;
       },
       onScaleUpdate: (d) {
         setState(() {
-          _scale = (_baseScale * d.scale).clamp(0.1, 100.0);
+          // Hanya pan -- scale tidak berubah dari gesture
           if (_focalStart != null) {
             _offsetX = _startOffX + d.localFocalPoint.dx - _focalStart!.dx;
             _offsetY = _startOffY + d.localFocalPoint.dy - _focalStart!.dy;
           }
-          _currentGridInterval = _calcGridInterval();
         });
       },
       onTap: widget.onTap,
