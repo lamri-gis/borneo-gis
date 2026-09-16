@@ -9,7 +9,7 @@ class GpsProvider extends ChangeNotifier {
   StreamSubscription? _compassSub;
 
   GpsData? _current;
-  GpsData? _firstFix; // GPS pertama dapat sinyal
+  GpsData? _firstFix;
   double _heading = 0;
   bool _isActive = false;
   bool _hasPermission = false;
@@ -51,9 +51,9 @@ class GpsProvider extends ChangeNotifier {
       _hasPermission = true;
       _errorMessage = null;
 
-      const settings = AndroidSettings(
+      final settings = AndroidSettings(
         accuracy: LocationAccuracy.high,
-        intervalDuration: Duration(milliseconds: 500),
+        intervalDuration: const Duration(milliseconds: 500),
         distanceFilter: 0,
         forceLocationManager: false,
       );
@@ -69,7 +69,7 @@ class GpsProvider extends ChangeNotifier {
           timestamp: pos.timestamp,
         );
         _current = data;
-        _firstFix ??= data; // simpan GPS pertama dapat sinyal
+        _firstFix ??= data;
         _isActive = true;
         _errorMessage = null;
         notifyListeners();
