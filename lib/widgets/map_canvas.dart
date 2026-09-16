@@ -59,8 +59,8 @@ class _MapCanvasState extends State<MapCanvas> {
     super.dispose();
   }
 
-  void zoomIn() => setState(() => _scale = (_scale * 1.3).clamp(0.1, 100.0));
-  void zoomOut() => setState(() => _scale = (_scale / 1.3).clamp(0.1, 100.0));
+  void zoomIn() => setState(() => _scale = (_scale * 1.585).clamp(0.1, 2000.0));
+  void zoomOut() => setState(() => _scale = (_scale / 1.585).clamp(0.1, 2000.0));
 
   void centerToGps() {
     final gps = context.read<GpsProvider>();
@@ -88,7 +88,7 @@ class _MapCanvasState extends State<MapCanvas> {
     // Cari interval terkecil yang spacing-nya >= 60px
     for (final step in _gridSteps) {
       final px = (step / base) * _scale;
-      if (px >= 60) return step;
+      if (px >= 40) return step;
     }
     return _gridSteps.last;
   }
