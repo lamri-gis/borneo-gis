@@ -120,7 +120,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             // Pass gridInterval dari mapController ke GpsPanel
             StatefulBuilder(
-              builder: (_, setState) => GpsPanel(
+              builder: (_, setState) =>  GpsPanel(
                 gridInterval: _mapController.gridInterval,
               ),
             ),
