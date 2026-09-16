@@ -34,6 +34,7 @@ class _MapCanvasState extends State<MapCanvas> {
   double _startOffX = 0;
   double _startOffY = 0;
   Offset? _focalStart;
+  bool _autocentered = false; // flag auto-center saat GPS pertama dapat sinyal
 
   @override
   void initState() {
@@ -55,7 +56,27 @@ class _MapCanvasState extends State<MapCanvas> {
 
   void zoomIn() => setState(() => _scale = (_scale * 1.3).clamp(0.1, 100.0));
   void zoomOut() => setState(() => _scale = (_scale / 1.3).clamp(0.1, 100.0));
-  void centerToGps() => setState(() { _offsetX = 0; _offsetY = 0; });
+
+  void centerToGps() {
+    final gps = context.read<GpsProvider>();
+    if (gps.current == null || gps.firstFix == null) {
+      setState(() { _offsetX = 0; _offsetY = 0; });
+      return;
+    }
+    // Hitung offset dari firstFix ke current GPS
+    final current = gps.current!;
+    final first = gps.firstFix!;
+    const base = 10.0;
+    const mPerDeg = 111319.9;
+    final dLat = current.latitude - first.latitude;
+    final dLon = current.longitude - first.longitude;
+    final dx = dLon * mPerDeg * math.cos(first.latitude * math.pi / 180);
+    final dy = -dLat * mPerDeg;
+    setState(() {
+      _offsetX = -(dx / base) * _scale;
+      _offsetY = -(dy / base) * _scale;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +84,12 @@ class _MapCanvasState extends State<MapCanvas> {
     final map = context.watch<MapProvider>();
     final track = context.watch<TrackProvider>();
     final size = MediaQuery.of(context).size;
+
+    // Auto-center saat GPS pertama dapat sinyal
+    if (gps.current != null && !_autocentered) {
+      _autocentered = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => centerToGps());
+    }
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -86,7 +113,7 @@ class _MapCanvasState extends State<MapCanvas> {
         if (widget.onLongPress != null && gps.current != null) {
           final latLon = _pixelToLatLon(
             d.localPosition.dx, d.localPosition.dy,
-            gps.current!, size.width, size.height,
+            gps.firstFix ?? gps.current!, size.width, size.height,
           );
           widget.onLongPress!(latLon.latitude, latLon.longitude);
         }
@@ -95,6 +122,7 @@ class _MapCanvasState extends State<MapCanvas> {
         size: Size(size.width, size.height),
         painter: _MapPainter(
           gpsData: gps.current,
+          firstFix: gps.firstFix,
           pins: map.pins,
           circles: map.circles,
           trackPoints: track.currentPoints,
@@ -122,6 +150,7 @@ class _MapCanvasState extends State<MapCanvas> {
 
 class _MapPainter extends CustomPainter {
   final GpsData? gpsData;
+  final GpsData? firstFix;
   final List<MapPin> pins;
   final List<RadiusCircle> circles;
   final List<TrackPoint> trackPoints;
@@ -137,6 +166,7 @@ class _MapPainter extends CustomPainter {
 
   _MapPainter({
     required this.gpsData,
+    required this.firstFix,
     required this.pins,
     required this.circles,
     required this.trackPoints,
@@ -148,10 +178,12 @@ class _MapPainter extends CustomPainter {
     required this.screenH,
   });
 
-  Offset _toScreen(double lat, double lon, GpsData center) {
-    final dLat = lat - center.latitude;
-    final dLon = lon - center.longitude;
-    final dx = dLon * _mPerDeg * math.cos(center.latitude * math.pi / 180);
+  GpsData get _ref => firstFix ?? gpsData!;
+
+  Offset _toScreen(double lat, double lon) {
+    final dLat = lat - _ref.latitude;
+    final dLon = lon - _ref.longitude;
+    final dx = dLon * _mPerDeg * math.cos(_ref.latitude * math.pi / 180);
     final dy = -dLat * _mPerDeg;
     return Offset(
       screenW / 2 + (dx / _base) * scale + offsetX,
@@ -163,8 +195,10 @@ class _MapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = Colors.white);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = AppColors.mapBackground,
+    );
     _drawGrid(canvas, size);
     if (gpsData == null) return;
     _drawCircles(canvas);
@@ -175,8 +209,9 @@ class _MapPainter extends CustomPainter {
       _drawTrackPoints(canvas, trackPoints, AppColors.trackLine);
     }
     _drawPins(canvas);
-    final center = Offset(screenW / 2 + offsetX, screenH / 2 + offsetY);
-    _drawGpsMarker(canvas, center);
+    // GPS marker di posisi GPS sekarang
+    final gpsScreen = _toScreen(gpsData!.latitude, gpsData!.longitude);
+    _drawGpsMarker(canvas, gpsScreen);
   }
 
   void _drawGrid(Canvas canvas, Size size) {
@@ -201,7 +236,7 @@ class _MapPainter extends CustomPainter {
 
   void _drawCircles(Canvas canvas) {
     for (final circle in circles) {
-      final center = _toScreen(circle.latitude, circle.longitude, gpsData!);
+      final center = _toScreen(circle.latitude, circle.longitude);
       for (final r in circle.radii) {
         final px = _metersToPixels(r);
         canvas.drawCircle(center, px,
@@ -224,7 +259,7 @@ class _MapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     final path = Path();
     for (int i = 0; i < points.length; i++) {
-      final pt = _toScreen(points[i].latitude, points[i].longitude, gpsData!);
+      final pt = _toScreen(points[i].latitude, points[i].longitude);
       if (i == 0) path.moveTo(pt.dx, pt.dy);
       else path.lineTo(pt.dx, pt.dy);
     }
@@ -233,10 +268,11 @@ class _MapPainter extends CustomPainter {
 
   void _drawPins(Canvas canvas) {
     for (final pin in pins) {
-      final pos = _toScreen(pin.latitude, pin.longitude, gpsData!);
+      final pos = _toScreen(pin.latitude, pin.longitude);
       final paint = Paint()..color = pin.color;
       canvas.drawCircle(pos, 8, paint);
-      canvas.drawCircle(pos, 8, Paint()..color = Colors.white..strokeWidth = 1.5..style = PaintingStyle.stroke);
+      canvas.drawCircle(pos, 8,
+          Paint()..color = Colors.white..strokeWidth = 1.5..style = PaintingStyle.stroke);
       if (pin.label.isNotEmpty) {
         _drawText(canvas, pin.label, pos + const Offset(0, -16), 10, Colors.white);
       }
@@ -252,18 +288,22 @@ class _MapPainter extends CustomPainter {
           Paint()..color = AppColors.primary.withOpacity(0.4)..strokeWidth = 1..style = PaintingStyle.stroke);
     }
     canvas.drawCircle(pos, 8, Paint()..color = AppColors.primary);
-    canvas.drawCircle(pos, 8, Paint()..color = Colors.white..strokeWidth = 2..style = PaintingStyle.stroke);
+    canvas.drawCircle(pos, 8,
+        Paint()..color = Colors.white..strokeWidth = 2..style = PaintingStyle.stroke);
     canvas.drawCircle(pos, 3, Paint()..color = Colors.white);
   }
 
   void _drawText(Canvas canvas, String text, Offset pos, double size, Color color) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w600)),
+      text: TextSpan(
+          text: text,
+          style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w600)),
       textDirection: TextDirection.ltr,
     )..layout();
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(pos.dx - tp.width / 2 - 3, pos.dy - tp.height / 2 - 2, tp.width + 6, tp.height + 4),
+        Rect.fromLTWH(pos.dx - tp.width / 2 - 3, pos.dy - tp.height / 2 - 2,
+            tp.width + 6, tp.height + 4),
         const Radius.circular(3),
       ),
       Paint()..color = Colors.black.withOpacity(0.5),
