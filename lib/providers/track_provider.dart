@@ -12,7 +12,7 @@ class TrackProvider extends ChangeNotifier {
   bool get isRecording => _isRecording;
   MapTrack? get activeTrack => _activeTrack;
   List<MapTrack> get savedTracks => _savedTracks;
-  List<TrackPoint> get currentPoints => _activeTrack?.points ?? [];
+  List<OldTrackPoint> get currentPoints => _activeTrack?.points ?? [];
 
   void startRecording(String name) {
     _activeTrack = MapTrack(name: name);
@@ -22,7 +22,7 @@ class TrackProvider extends ChangeNotifier {
 
   void addPoint(GpsData gps) {
     if (!_isRecording || _activeTrack == null) return;
-    _activeTrack!.points.add(TrackPoint(
+    _activeTrack!.points.add(OldTrackPoint(
       latitude: gps.latitude,
       longitude: gps.longitude,
       altitude: gps.altitude,
