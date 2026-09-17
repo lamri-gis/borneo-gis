@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'providers/gps_provider.dart';
 import 'providers/map_provider.dart';
 import 'providers/track_provider.dart';
+import 'providers/layer_provider.dart';
 import 'screens/main_screen.dart';
 
 void main() async {
@@ -27,6 +28,7 @@ class BorneoGISNavigator extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GpsProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => TrackProvider()),
+        ChangeNotifierProvider(create: (_) => LayerProvider()),
       ],
       child: MaterialApp(
         title: 'BorneoGIS Navigator',
