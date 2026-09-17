@@ -175,7 +175,7 @@ class _MapPainter extends CustomPainter {
   final GpsData? firstFix;
   final List<MapPin> pins;
   final List<RadiusCircle> circles;
-  final List<TrackPoint> trackPoints;
+  final List<OldTrackPoint> trackPoints;
   final List<MapTrack> savedTracks;
   final double scale;
   final double offsetX;
@@ -307,7 +307,7 @@ class _MapPainter extends CustomPainter {
     }
   }
 
-  void _drawTrackPoints(Canvas canvas, List<TrackPoint> points, Color color) {
+  void _drawTrackPoints(Canvas canvas, List<OldTrackPoint> points, Color color) {
     if (points.length < 2) return;
     final paint = Paint()
       ..color = color
