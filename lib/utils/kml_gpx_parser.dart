@@ -11,9 +11,7 @@ class KmlGpxParser {
     try {
       if (lower.endsWith('.gpx')) return _parseGpx(content, filePath);
       if (lower.endsWith('.kml')) return _parseKml(content, filePath);
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
     return null;
   }
 
@@ -22,7 +20,6 @@ class KmlGpxParser {
     final pins = <MapPin>[];
     final tracks = <MapTrack>[];
 
-    // Waypoints
     for (final wpt in doc.findAllElements('wpt')) {
       final lat = double.tryParse(wpt.getAttribute('lat') ?? '') ?? 0;
       final lon = double.tryParse(wpt.getAttribute('lon') ?? '') ?? 0;
@@ -30,17 +27,16 @@ class KmlGpxParser {
       pins.add(MapPin(latitude: lat, longitude: lon, label: name));
     }
 
-    // Tracks
     for (final trk in doc.findAllElements('trk')) {
       final name = trk.findElements('name').firstOrNull?.innerText ?? 'Track';
-      final points = <TrackPoint>[];
+      final points = <OldTrackPoint>[];
       for (final trkpt in trk.findAllElements('trkpt')) {
         final lat = double.tryParse(trkpt.getAttribute('lat') ?? '') ?? 0;
         final lon = double.tryParse(trkpt.getAttribute('lon') ?? '') ?? 0;
         final ele = double.tryParse(trkpt.findElements('ele').firstOrNull?.innerText ?? '') ?? 0;
         final timeStr = trkpt.findElements('time').firstOrNull?.innerText;
         final time = timeStr != null ? DateTime.tryParse(timeStr) ?? DateTime.now() : DateTime.now();
-        points.add(TrackPoint(latitude: lat, longitude: lon, altitude: ele, timestamp: time));
+        points.add(OldTrackPoint(latitude: lat, longitude: lon, altitude: ele, timestamp: time));
       }
       tracks.add(MapTrack(name: name, points: points));
     }
@@ -69,14 +65,14 @@ class KmlGpxParser {
       final ls = pm.findElements('LineString').firstOrNull;
       if (ls != null) {
         final coordsStr = ls.findElements('coordinates').firstOrNull?.innerText.trim() ?? '';
-        final points = <TrackPoint>[];
+        final points = <OldTrackPoint>[];
         for (final line in coordsStr.split(RegExp(r'\s+'))) {
           final parts = line.split(',');
           if (parts.length >= 2) {
             final lon = double.tryParse(parts[0]) ?? 0;
             final lat = double.tryParse(parts[1]) ?? 0;
             final alt = parts.length > 2 ? double.tryParse(parts[2]) ?? 0 : 0.0;
-            points.add(TrackPoint(latitude: lat, longitude: lon, altitude: alt, timestamp: DateTime.now()));
+            points.add(OldTrackPoint(latitude: lat, longitude: lon, altitude: alt, timestamp: DateTime.now()));
           }
         }
         if (points.isNotEmpty) tracks.add(MapTrack(name: name, points: points));
@@ -93,10 +89,5 @@ class ParsedOverlay {
   final String filePath;
   final OverlayType type;
 
-  const ParsedOverlay({
-    required this.pins,
-    required this.tracks,
-    required this.filePath,
-    required this.type,
-  });
+  const ParsedOverlay({required this.pins, required this.tracks, required this.filePath, required this.type});
 }
