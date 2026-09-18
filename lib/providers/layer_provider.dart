@@ -3,17 +3,39 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/layer_models.dart';
 
+enum HighlightType { pin, track, line, polygon }
+
+class HighlightState {
+  final String id;
+  final HighlightType type;
+  const HighlightState({required this.id, required this.type});
+}
+
 class LayerProvider extends ChangeNotifier {
   List<FieldLayer> _layers = [];
   FieldLayer? _activeLayer;
   LayerTrack? _recordingTrack;
+  HighlightState? _highlight;
 
   List<FieldLayer> get layers => _layers;
   FieldLayer? get activeLayer => _activeLayer;
   LayerTrack? get recordingTrack => _recordingTrack;
   bool get isRecording => _recordingTrack != null;
+  HighlightState? get highlight => _highlight;
 
   LayerProvider() { _load(); }
+
+  // ── HIGHLIGHT ──────────────────────────────────────
+
+  void setHighlight(String id, HighlightType type) {
+    _highlight = HighlightState(id: id, type: type);
+    notifyListeners();
+  }
+
+  void clearHighlight() {
+    _highlight = null;
+    notifyListeners();
+  }
 
   // ── LAYER ──────────────────────────────────────────
 
@@ -31,14 +53,13 @@ class LayerProvider extends ChangeNotifier {
 
   Future<void> removeLayer(String id) async {
     final layer = _layers.firstWhere((l) => l.id == id);
-    if (!layer.isEmpty) return; // wajib kosong dulu
+    if (!layer.isEmpty) return;
     _layers.removeWhere((l) => l.id == id);
     if (_activeLayer?.id == id) _activeLayer = null;
     await _save();
     notifyListeners();
   }
 
-  // Hitung auto-index untuk nama layer kosong hari ini
   int todayLayerAutoIndex(DateTime dt) {
     final yy = dt.year.toString().substring(2);
     final mm = dt.month.toString().padLeft(2, '0');
@@ -69,6 +90,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removePin(String layerId, String pinId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.pins.removeWhere((p) => p.id == pinId);
+    if (_highlight?.id == pinId) _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -83,6 +105,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removeAllPins(String layerId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.pins.clear();
+    _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -95,7 +118,7 @@ class LayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updatePinColor(String layerId, String pinId, dynamic color) async {
+  Future<void> updatePinColor(String layerId, String pinId, Color color) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     final pin = layer.pins.firstWhere((p) => p.id == pinId);
     pin.color = color;
@@ -133,6 +156,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removeTrack(String layerId, String trackId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.tracks.removeWhere((t) => t.id == trackId);
+    if (_highlight?.id == trackId) _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -147,6 +171,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removeAllTracks(String layerId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.tracks.clear();
+    _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -159,7 +184,7 @@ class LayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateTrackColor(String layerId, String trackId, dynamic color) async {
+  Future<void> updateTrackColor(String layerId, String trackId, Color color) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     final track = layer.tracks.firstWhere((t) => t.id == trackId);
     track.color = color;
@@ -179,6 +204,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removeLine(String layerId, String lineId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.lines.removeWhere((l) => l.id == lineId);
+    if (_highlight?.id == lineId) _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -186,6 +212,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removeAllLines(String layerId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.lines.clear();
+    _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -198,7 +225,7 @@ class LayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateLineColor(String layerId, String lineId, dynamic color) async {
+  Future<void> updateLineColor(String layerId, String lineId, Color color) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     final line = layer.lines.firstWhere((l) => l.id == lineId);
     line.color = color;
@@ -218,6 +245,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removePolygon(String layerId, String polygonId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.polygons.removeWhere((p) => p.id == polygonId);
+    if (_highlight?.id == polygonId) _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -225,6 +253,7 @@ class LayerProvider extends ChangeNotifier {
   Future<void> removeAllPolygons(String layerId) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     layer.polygons.clear();
+    _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -237,7 +266,7 @@ class LayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updatePolygonColor(String layerId, String polygonId, dynamic color) async {
+  Future<void> updatePolygonColor(String layerId, String polygonId, Color color) async {
     final layer = _layers.firstWhere((l) => l.id == layerId);
     final polygon = layer.polygons.firstWhere((p) => p.id == polygonId);
     polygon.color = color;
@@ -284,6 +313,7 @@ class LayerProvider extends ChangeNotifier {
     layer.pins.clear();
     layer.lines.clear();
     layer.polygons.clear();
+    _highlight = null;
     await _save();
     notifyListeners();
   }
@@ -305,9 +335,7 @@ class LayerProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final data = prefs.getString('field_layers');
       if (data != null) {
-        _layers = (jsonDecode(data) as List)
-            .map((j) => FieldLayer.fromJson(j))
-            .toList();
+        _layers = (jsonDecode(data) as List).map((j) => FieldLayer.fromJson(j)).toList();
       }
     } catch (e) {
       debugPrint('LayerProvider._load error: $e');
