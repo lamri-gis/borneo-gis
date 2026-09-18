@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/layer_models.dart';
 
@@ -17,12 +16,18 @@ class LayerProvider extends ChangeNotifier {
   FieldLayer? _activeLayer;
   LayerTrack? _recordingTrack;
   HighlightState? _highlight;
+  AreaUnit _pendingPolygonUnit = AreaUnit.hectare;
 
   List<FieldLayer> get layers => _layers;
   FieldLayer? get activeLayer => _activeLayer;
   LayerTrack? get recordingTrack => _recordingTrack;
   bool get isRecording => _recordingTrack != null;
   HighlightState? get highlight => _highlight;
+  AreaUnit get pendingPolygonUnit => _pendingPolygonUnit;
+
+  void setPendingPolygonUnit(AreaUnit unit) {
+    _pendingPolygonUnit = unit;
+  }
 
   LayerProvider() { _load(); }
 
