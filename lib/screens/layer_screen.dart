@@ -87,9 +87,17 @@ class _LayerCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 12, height: 12,
-              decoration: BoxDecoration(color: layer.color, shape: BoxShape.circle),
+            // Indikator aktif
+            GestureDetector(
+              onTap: () => lp.setActiveLayer(layer),
+              child: Container(
+                width: 14, height: 14,
+                decoration: BoxDecoration(
+                  color: isActive ? layer.color : Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: layer.color, width: 2),
+                ),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -105,15 +113,18 @@ class _LayerCard extends StatelessWidget {
                 ],
               ),
             ),
-            if (isActive)
-              const Icon(Icons.check_circle, color: AppColors.primary, size: 18),
-            const SizedBox(width: 4),
-            // Hapus layer (hanya kalau kosong)
+            // Edit radius
+            IconButton(
+              icon: const Icon(Icons.radio_button_unchecked, color: AppColors.accent, size: 18),
+              onPressed: () => _editRadius(context, lp, layer),
+              tooltip: 'Edit radius',
+            ),
+            // Hapus layer
             IconButton(
               icon: Icon(Icons.delete_outline, color: layer.isEmpty ? AppColors.error : AppColors.divider, size: 18),
-              onPressed: layer.isEmpty ? () => _confirmDelete(context, lp, layer) : () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kosongkan semua section terlebih dahulu')));
-              },
+              onPressed: layer.isEmpty
+                  ? () => _confirmDelete(context, lp, layer)
+                  : () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kosongkan semua section terlebih dahulu'))),
             ),
           ],
         ),
@@ -122,6 +133,57 @@ class _LayerCard extends StatelessWidget {
   }
 
   String _radiusLabel(double r) => r >= 1000 ? '${(r/1000).toStringAsFixed(0)} km' : '${r.toInt()} m';
+
+  void _editRadius(BuildContext context, LayerProvider lp, FieldLayer layer) {
+    double newRadius = layer.radius;
+    final List<double> options = [50, 100, 200, 500, 1000, 2000, 5000];
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text('Edit Radius', style: TextStyle(color: AppColors.textPrimary)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Radius sekarang: ${_radiusLabel(layer.radius)}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: options.map((r) {
+                  final selected = newRadius == r;
+                  return GestureDetector(
+                    onTap: () => setS(() => newRadius = r),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: selected ? AppColors.primary : AppColors.background,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: selected ? AppColors.primary : AppColors.divider),
+                      ),
+                      child: Text(_radiusLabel(r), style: TextStyle(color: selected ? Colors.black : AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: () {
+                lp.updateLayerRadius(layer.id, newRadius);
+                Navigator.pop(context);
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _confirmDelete(BuildContext context, LayerProvider lp, FieldLayer layer) {
     showDialog(
