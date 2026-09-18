@@ -110,7 +110,10 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     if (_drawingMode == DrawingMode.line) {
       layerProvider.addLine(layerId, LayerLine(points: List.from(_drawPoints)));
     } else if (_drawingMode == DrawingMode.polygon && _drawPoints.length >= 3) {
-      layerProvider.addPolygon(layerId, LayerPolygon(points: List.from(_drawPoints)));
+      layerProvider.addPolygon(layerId, LayerPolygon(
+        points: List.from(_drawPoints),
+        areaUnit: layerProvider.pendingPolygonUnit,
+      ));
     }
     setState(() { _drawingMode = DrawingMode.none; _drawPoints.clear(); });
   }
