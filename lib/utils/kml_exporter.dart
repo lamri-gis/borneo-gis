@@ -6,15 +6,11 @@ enum ExportSource { original, import_ }
 enum ExportType { all, track, pin, line, polygon }
 
 class KmlExporter {
-  // Export original section
   static Future<String?> exportOriginal({
     required FieldLayer layer,
     required ExportType type,
     required String fileName,
   }) async {
-    final path = await _pickSavePath(fileName);
-    if (path == null) return null;
-
     final buf = StringBuffer();
     _writeHeader(buf, fileName);
 
@@ -32,20 +28,14 @@ class KmlExporter {
     }
 
     _writeFooter(buf);
-    final file = File(path);
-    await file.writeAsString(buf.toString());
-    return path;
+    return _saveFile(fileName, buf.toString());
   }
 
-  // Export import section
   static Future<String?> exportImport({
     required ImportedFile importedFile,
     required ExportType type,
     required String fileName,
   }) async {
-    final path = await _pickSavePath(fileName);
-    if (path == null) return null;
-
     final buf = StringBuffer();
     _writeHeader(buf, fileName);
 
@@ -63,17 +53,28 @@ class KmlExporter {
     }
 
     _writeFooter(buf);
-    final file = File(path);
-    await file.writeAsString(buf.toString());
-    return path;
+    return _saveFile(fileName, buf.toString());
   }
 
-  // Pilih folder simpan -- pakai FilePicker
-  static Future<String?> _pickSavePath(String fileName) async {
-    String? dirPath = await FilePicker.platform.getDirectoryPath();
-    if (dirPath == null) return null;
-    final name = fileName.endsWith('.kml') ? fileName : '$fileName.kml';
-    return '$dirPath/$name';
+  // Pilih folder dan simpan file
+  static Future<String?> _saveFile(String fileName, String content) async {
+    try {
+      // Minta user pilih folder
+      final dirPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Pilih folder penyimpanan',
+      );
+      if (dirPath == null) return null;
+
+      final name = fileName.trim().isEmpty ? 'export' : fileName.trim();
+      final safeName = name.endsWith('.kml') ? name : '$name.kml';
+      final path = '$dirPath/$safeName';
+
+      final file = File(path);
+      await file.writeAsString(content, flush: true);
+      return path;
+    } catch (e) {
+      return null;
+    }
   }
 
   static void _writeHeader(StringBuffer buf, String name) {
@@ -116,7 +117,6 @@ class KmlExporter {
     buf.writeln('        <LinearRing>');
     buf.writeln('          <coordinates>');
     for (final p in points) buf.writeln('            ${p.longitude},${p.latitude},0');
-    // Tutup poligon ke titik pertama
     if (points.isNotEmpty) buf.writeln('            ${points.first.longitude},${points.first.latitude},0');
     buf.writeln('          </coordinates>');
     buf.writeln('        </LinearRing>');
