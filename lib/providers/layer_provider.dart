@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/layer_models.dart';
 
@@ -54,6 +53,30 @@ class LayerProvider extends ChangeNotifier {
   Future<void> addLayer(FieldLayer layer) async {
     _layers.add(layer);
     _activeLayer = layer;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> updateLayerRadius(String layerId, double newRadius) async {
+    final layer = _layers.firstWhere((l) => l.id == layerId);
+    // Buat layer baru dengan radius berbeda karena field final
+    final updated = FieldLayer(
+      id: layer.id,
+      name: layer.name,
+      createdAt: layer.createdAt,
+      latitude: layer.latitude,
+      longitude: layer.longitude,
+      radius: newRadius,
+      color: layer.color,
+      tracks: layer.tracks,
+      pins: layer.pins,
+      lines: layer.lines,
+      polygons: layer.polygons,
+      imports: layer.imports,
+    );
+    final idx = _layers.indexWhere((l) => l.id == layerId);
+    _layers[idx] = updated;
+    if (_activeLayer?.id == layerId) _activeLayer = updated;
     await _save();
     notifyListeners();
   }
