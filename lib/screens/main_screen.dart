@@ -41,7 +41,6 @@ class _MainScreenState extends State<MainScreen> {
     final gps = context.watch<GpsProvider>();
     final layer = context.watch<LayerProvider>();
 
-    // Auto-add track point kalau recording
     if (layer.isRecording && gps.current != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         layer.addTrackPoint(LayerTrackPoint(
@@ -64,7 +63,9 @@ class _MainScreenState extends State<MainScreen> {
                 children: [
                   MapCanvas(
                     controller: _mapController,
-                    onLongPress: (lat, lon) => _onLongPress(context, lat, lon),
+                    onLongPress: (lat, lon) => _showPinDialog(context, lat, lon),
+                    onTapObject: (id, type, info) => _showObjectPopup(context, id, type, info, layer),
+                    onDoubleTapObject: (id, type) => _openObjectDetail(context, id, type, layer),
                   ),
                   const Center(child: _Crosshair()),
 
@@ -113,17 +114,11 @@ class _MainScreenState extends State<MainScreen> {
                     ),
 
                   // Kompas
-                  Positioned(
-                    top: 12, right: 12,
-                    child: CompassWidget(heading: gps.heading),
-                  ),
+                  Positioned(top: 12, right: 12, child: CompassWidget(heading: gps.heading)),
 
                   // Track recording indicator
                   if (layer.isRecording)
-                    Positioned(
-                      top: 12, left: 12,
-                      child: _TrackingIndicator(provider: layer),
-                    ),
+                    Positioned(top: 12, left: 12, child: _TrackingIndicator(provider: layer)),
 
                   // Drawing mode toolbar
                   if (_drawingMode != DrawingMode.none)
@@ -140,10 +135,7 @@ class _MainScreenState extends State<MainScreen> {
 
                   // Zoom buttons
                   if (_drawingMode == DrawingMode.none)
-                    Positioned(
-                      right: 12, bottom: 12,
-                      child: _ZoomButtons(controller: _mapController),
-                    ),
+                    Positioned(right: 12, bottom: 12, child: _ZoomButtons(controller: _mapController)),
 
                   // Action buttons
                   if (_drawingMode == DrawingMode.none)
@@ -151,10 +143,10 @@ class _MainScreenState extends State<MainScreen> {
                       left: 12, bottom: 12,
                       child: _ActionButtons(
                         onLayer: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LayerScreen())),
-                        onPin: () => _addPin(context),
+                        onPin: () => _addPinFromCrosshair(context),
                         onTrack: () => _toggleTrack(context, layer),
                         onLine: () => _startDrawing(DrawingMode.line),
-                        onPolygon: () => _startDrawing(DrawingMode.polygon),
+                        onPolygon: () => _startPolygon(context),
                         onImport: () => _importFile(context),
                         onExport: () => _showExport(context, layer),
                         isTracking: layer.isRecording,
@@ -198,6 +190,7 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
           ),
+          // Target -- snap crosshair ke GPS
           IconButton(
             icon: const Icon(Icons.my_location, color: AppColors.textPrimary, size: 20),
             onPressed: () => _mapController.centerToGps(),
@@ -215,34 +208,25 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  void _onLongPress(BuildContext context, double lat, double lon) {
+  // Pin dari crosshair
+  void _addPinFromCrosshair(BuildContext context) {
     final layer = context.read<LayerProvider>();
     if (layer.activeLayer == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
       return;
     }
-    _showPinDialog(context, lat, lon);
-  }
-
-  void _addPin(BuildContext context) {
-    final gps = context.read<GpsProvider>();
-    final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
-      return;
-    }
-    if (gps.current == null) {
+    final coord = _mapController.getCrosshairCoord();
+    if (coord == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('GPS belum aktif')));
       return;
     }
-    _showPinDialog(context, gps.current!.latitude, gps.current!.longitude);
+    _showPinDialog(context, coord.latitude, coord.longitude);
   }
 
   void _showPinDialog(BuildContext context, double lat, double lon) {
     final layer = context.read<LayerProvider>();
     if (layer.activeLayer == null) return;
 
-    // Cek apakah dalam radius
     if (!layer.activeLayer!.containsPoint(lat, lon)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Posisi di luar radius -- pin tidak bisa dipasang'), backgroundColor: AppColors.error),
@@ -264,11 +248,7 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               Text('${lat.toStringAsFixed(6)}°, ${lon.toStringAsFixed(6)}°', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: const InputDecoration(labelText: 'Nama (opsional)'),
-              ),
+              TextField(controller: ctrl, style: const TextStyle(color: AppColors.textPrimary), decoration: const InputDecoration(labelText: 'Nama (opsional)')),
               const SizedBox(height: 12),
               const Text('Warna', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
               const SizedBox(height: 8),
@@ -278,10 +258,7 @@ class _MainScreenState extends State<MainScreen> {
                   child: Container(
                     margin: const EdgeInsets.only(right: 8),
                     width: 28, height: 28,
-                    decoration: BoxDecoration(
-                      color: c, shape: BoxShape.circle,
-                      border: Border.all(color: selectedColor == c ? AppColors.primary : AppColors.divider, width: selectedColor == c ? 3 : 1),
-                    ),
+                    decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: selectedColor == c ? AppColors.primary : AppColors.divider, width: selectedColor == c ? 3 : 1)),
                   ),
                 )).toList(),
               ),
@@ -294,18 +271,13 @@ class _MainScreenState extends State<MainScreen> {
                 final gps = context.read<GpsProvider>();
                 final pin = LayerPin(
                   name: ctrl.text.isEmpty ? null : ctrl.text,
-                  latitude: lat,
-                  longitude: lon,
+                  latitude: lat, longitude: lon,
                   altitude: gps.current?.altitude ?? 0,
                   color: selectedColor,
                 );
                 final ok = await context.read<LayerProvider>().addPin(pin);
                 Navigator.pop(context);
-                if (!ok && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Gagal pasang pin'), backgroundColor: AppColors.error),
-                  );
-                }
+                if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal pasang pin'), backgroundColor: AppColors.error));
               },
               child: const Text('Pasang'),
             ),
@@ -313,6 +285,64 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  // Popup info saat klik 1x objek
+  void _showObjectPopup(BuildContext context, String id, HighlightType type, String info, LayerProvider layer) {
+    if (layer.activeLayer == null) return;
+    final al = layer.activeLayer!;
+
+    String name = '';
+    DateTime? timestamp;
+
+    switch (type) {
+      case HighlightType.pin:
+        final obj = al.pins.firstWhere((p) => p.id == id, orElse: () => LayerPin(latitude: 0, longitude: 0));
+        name = obj.name; timestamp = obj.createdAt; break;
+      case HighlightType.track:
+        final obj = al.tracks.firstWhere((t) => t.id == id, orElse: () => LayerTrack());
+        name = obj.name; timestamp = obj.createdAt; break;
+      case HighlightType.line:
+        final obj = al.lines.firstWhere((l) => l.id == id, orElse: () => LayerLine());
+        name = obj.name; timestamp = obj.createdAt; break;
+      case HighlightType.polygon:
+        final obj = al.polygons.firstWhere((p) => p.id == id, orElse: () => LayerPolygon());
+        name = obj.name; timestamp = obj.createdAt; break;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(_typeIcon(type), color: _typeColor(type), size: 18),
+              const SizedBox(width: 8),
+              Text(name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 8),
+            if (info.isNotEmpty) Text(info, style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+            if (timestamp != null) ...[
+              const SizedBox(height: 4),
+              Text(_formatTs(timestamp), style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+            ],
+            const SizedBox(height: 8),
+            Text('Double tap objek untuk edit', style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Masuk detail saat double tap
+  void _openObjectDetail(BuildContext context, String id, HighlightType type, LayerProvider layer) {
+    if (layer.activeLayer == null) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(layerId: layer.activeLayer!.id)));
   }
 
   void _toggleTrack(BuildContext context, LayerProvider layer) {
@@ -336,6 +366,42 @@ class _MainScreenState extends State<MainScreen> {
     }
     setState(() => _drawingMode = mode);
     _mapController.setDrawingMode(mode);
+  }
+
+  // Polygon -- pilih satuan dulu
+  void _startPolygon(BuildContext context) {
+    final layer = context.read<LayerProvider>();
+    if (layer.activeLayer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Pilih Satuan Luas', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Hektar (ha)', style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () { Navigator.pop(context); _startDrawingPolygon(AreaUnit.hectare); },
+            ),
+            ListTile(
+              title: const Text('Meter persegi (m²)', style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () { Navigator.pop(context); _startDrawingPolygon(AreaUnit.squareMeter); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _startDrawingPolygon(AreaUnit unit) {
+    // Simpan unit ke provider untuk dipakai saat finishDrawing
+    context.read<LayerProvider>().setPendingPolygonUnit(unit);
+    setState(() => _drawingMode = DrawingMode.polygon);
+    _mapController.setDrawingMode(DrawingMode.polygon);
   }
 
   Future<void> _importFile(BuildContext context) async {
@@ -364,17 +430,33 @@ class _MainScreenState extends State<MainScreen> {
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(layerId: layer.activeLayer!.id)));
   }
+
+  IconData _typeIcon(HighlightType type) {
+    switch (type) {
+      case HighlightType.pin: return Icons.location_on;
+      case HighlightType.track: return Icons.timeline;
+      case HighlightType.line: return Icons.polyline;
+      case HighlightType.polygon: return Icons.pentagon_outlined;
+    }
+  }
+
+  Color _typeColor(HighlightType type) {
+    switch (type) {
+      case HighlightType.pin: return AppColors.pinColor;
+      case HighlightType.track: return AppColors.primary;
+      case HighlightType.line: return AppColors.accent;
+      case HighlightType.polygon: return AppColors.warning;
+    }
+  }
+
+  String _formatTs(DateTime dt) => '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year}  ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
 }
 
 // ── DRAWING TOOLBAR ───────────────────────────────────────────────────────────
 
 class _DrawingToolbar extends StatelessWidget {
   final DrawingMode mode;
-  final VoidCallback onAdd;
-  final VoidCallback onUndo;
-  final VoidCallback onFinish;
-  final VoidCallback onCancel;
-
+  final VoidCallback onAdd, onUndo, onFinish, onCancel;
   const _DrawingToolbar({required this.mode, required this.onAdd, required this.onUndo, required this.onFinish, required this.onCancel});
 
   @override
@@ -388,7 +470,7 @@ class _DrawingToolbar extends StatelessWidget {
           children: [
             Text(mode == DrawingMode.line ? 'Line' : 'Poligon', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
             const SizedBox(width: 12),
-            _ToolBtn(icon: Icons.add_location_alt, color: AppColors.primary, label: 'Tambah', onTap: onAdd),
+            _ToolBtn(icon: Icons.add_location_alt, color: AppColors.primary, label: 'Shoot', onTap: onAdd),
             const SizedBox(width: 8),
             _ToolBtn(icon: Icons.undo, color: AppColors.warning, label: 'Undo', onTap: onUndo),
             const SizedBox(width: 8),
@@ -403,25 +485,17 @@ class _DrawingToolbar extends StatelessWidget {
 }
 
 class _ToolBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String label;
-  final VoidCallback onTap;
+  final IconData icon; final Color color; final String label; final VoidCallback onTap;
   const _ToolBtn({required this.icon, required this.color, required this.label, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 22),
-          Text(label, style: TextStyle(color: color, fontSize: 9)),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, color: color, size: 22),
+      Text(label, style: TextStyle(color: color, fontSize: 9)),
+    ]),
+  );
 }
 
 // ── CROSSHAIR ─────────────────────────────────────────────────────────────────
@@ -430,20 +504,18 @@ class _Crosshair extends StatelessWidget {
   const _Crosshair();
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(width: 40, height: 40, child: CustomPaint(painter: _CrosshairPainter()));
-  }
+  Widget build(BuildContext context) => SizedBox(width: 40, height: 40, child: CustomPaint(painter: _CrosshairPainter()));
 }
 
 class _CrosshairPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = AppColors.crosshair..strokeWidth = 1.5..strokeCap = StrokeCap.round;
-    final cx = size.width / 2; final cy = size.height / 2;
-    canvas.drawLine(Offset(0, cy), Offset(cx - 6, cy), paint);
-    canvas.drawLine(Offset(cx + 6, cy), Offset(size.width, cy), paint);
-    canvas.drawLine(Offset(cx, 0), Offset(cx, cy - 6), paint);
-    canvas.drawLine(Offset(cx, cy + 6), Offset(cx, size.height), paint);
+    final cx = size.width/2; final cy = size.height/2;
+    canvas.drawLine(Offset(0, cy), Offset(cx-6, cy), paint);
+    canvas.drawLine(Offset(cx+6, cy), Offset(size.width, cy), paint);
+    canvas.drawLine(Offset(cx, 0), Offset(cx, cy-6), paint);
+    canvas.drawLine(Offset(cx, cy+6), Offset(cx, size.height), paint);
     canvas.drawCircle(Offset(cx, cy), 2, paint);
   }
 
@@ -465,14 +537,11 @@ class _TrackingIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: AppColors.error.withOpacity(0.9), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text('REC  $pts pts  $dist', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-        ],
-      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text('REC  $pts pts  $dist', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 }
@@ -484,107 +553,73 @@ class _ZoomButtons extends StatelessWidget {
   const _ZoomButtons({required this.controller});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ZoomBtn(icon: Icons.add, onTap: () => controller.zoomIn()),
-        const SizedBox(height: 4),
-        _ZoomBtn(icon: Icons.remove, onTap: () => controller.zoomOut()),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Column(mainAxisSize: MainAxisSize.min, children: [
+    _ZoomBtn(icon: Icons.add, onTap: () => controller.zoomIn()),
+    const SizedBox(height: 4),
+    _ZoomBtn(icon: Icons.remove, onTap: () => controller.zoomOut()),
+  ]);
 }
 
 class _ZoomBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
+  final IconData icon; final VoidCallback onTap;
   const _ZoomBtn({required this.icon, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40, height: 40,
-        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider)),
-        child: Icon(icon, color: AppColors.textPrimary, size: 20),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 40, height: 40,
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider)),
+      child: Icon(icon, color: AppColors.textPrimary, size: 20),
+    ),
+  );
 }
 
 // ── ACTION BUTTONS ────────────────────────────────────────────────────────────
 
 class _ActionButtons extends StatelessWidget {
-  final VoidCallback onLayer;
-  final VoidCallback onPin;
-  final VoidCallback onTrack;
-  final VoidCallback onLine;
-  final VoidCallback onPolygon;
-  final VoidCallback onImport;
-  final VoidCallback onExport;
+  final VoidCallback onLayer, onPin, onTrack, onLine, onPolygon, onImport, onExport;
   final bool isTracking;
 
-  const _ActionButtons({
-    required this.onLayer,
-    required this.onPin,
-    required this.onTrack,
-    required this.onLine,
-    required this.onPolygon,
-    required this.onImport,
-    required this.onExport,
-    required this.isTracking,
-  });
+  const _ActionButtons({required this.onLayer, required this.onPin, required this.onTrack, required this.onLine, required this.onPolygon, required this.onImport, required this.onExport, required this.isTracking});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _ActionBtn(icon: Icons.layers, label: 'Layer', color: AppColors.primary, onTap: onLayer),
-        const SizedBox(height: 6),
-        _ActionBtn(icon: Icons.location_on, label: 'Pin', color: AppColors.pinColor, onTap: onPin),
-        const SizedBox(height: 6),
-        _ActionBtn(icon: isTracking ? Icons.stop : Icons.play_arrow, label: isTracking ? 'Stop' : 'Track', color: isTracking ? AppColors.error : AppColors.primary, onTap: onTrack),
-        const SizedBox(height: 6),
-        _ActionBtn(icon: Icons.polyline, label: 'Line', color: AppColors.accent, onTap: onLine),
-        const SizedBox(height: 6),
-        _ActionBtn(icon: Icons.pentagon_outlined, label: 'Poly', color: AppColors.warning, onTap: onPolygon),
-        const SizedBox(height: 6),
-        _ActionBtn(icon: Icons.upload_file, label: 'Import', color: AppColors.accent, onTap: onImport),
-        const SizedBox(height: 6),
-        _ActionBtn(icon: Icons.download, label: 'Export', color: AppColors.warning, onTap: onExport),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _ActionBtn(icon: Icons.layers, label: 'Layer', color: AppColors.primary, onTap: onLayer),
+      const SizedBox(height: 6),
+      _ActionBtn(icon: Icons.location_on, label: 'Pin', color: AppColors.pinColor, onTap: onPin),
+      const SizedBox(height: 6),
+      _ActionBtn(icon: isTracking ? Icons.stop : Icons.play_arrow, label: isTracking ? 'Stop' : 'Track', color: isTracking ? AppColors.error : AppColors.primary, onTap: onTrack),
+      const SizedBox(height: 6),
+      _ActionBtn(icon: Icons.polyline, label: 'Line', color: AppColors.accent, onTap: onLine),
+      const SizedBox(height: 6),
+      _ActionBtn(icon: Icons.pentagon_outlined, label: 'Poly', color: AppColors.warning, onTap: onPolygon),
+      const SizedBox(height: 6),
+      _ActionBtn(icon: Icons.upload_file, label: 'Import', color: AppColors.accent, onTap: onImport),
+      const SizedBox(height: 6),
+      _ActionBtn(icon: Icons.download, label: 'Export', color: AppColors.warning, onTap: onExport),
+    ],
+  );
 }
 
 class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
+  final IconData icon; final String label; final Color color; final VoidCallback onTap;
   const _ActionBtn({required this.icon, required this.label, required this.color, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+      ]),
+    ),
+  );
 }
