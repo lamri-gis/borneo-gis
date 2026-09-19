@@ -2,7 +2,7 @@ name: borneogis_navigator
 description: BorneoGIS Navigator - Field mapping app by Lamri.
 version: 1.0.4+5
 publish_to: none
- 
+
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
