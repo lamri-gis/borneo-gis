@@ -104,7 +104,7 @@ class _MainScreenState extends State<MainScreen> {
                     controller: _mapController,
                     onLongPress: (lat, lon) => _showPinDialog(context, lat, lon),
                     onTapObject: (id, type, info) => _showObjectPopup(context, id, type, info, layer),
-                    onDoubleTapObject: (id, type) => _openObjectDetail(context, id, type, layer),
+                    onDoubleTapObject: (id, type, isImport, importFileId) => _openObjectDetail(context, id, type, isImport, importFileId, layer),
                   ),
                   const Center(child: _Crosshair()),
 
@@ -353,9 +353,15 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  void _openObjectDetail(BuildContext context, String id, HighlightType type, LayerProvider layer) {
+  void _openObjectDetail(BuildContext context, String id, HighlightType type, bool isImport, String? importFileId, LayerProvider layer) {
     if (layer.activeLayer == null) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(layerId: layer.activeLayer!.id)));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(
+      layerId: layer.activeLayer!.id,
+      focusId: id,
+      focusType: type,
+      isImport: isImport,
+      importFileId: importFileId,
+    )));
   }
 
   void _toggleTrack(BuildContext context, LayerProvider layer) {
