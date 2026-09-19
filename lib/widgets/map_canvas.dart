@@ -24,11 +24,21 @@ class MapCanvasController {
   DrawingMode get drawingMode => _state?._drawingMode ?? DrawingMode.none;
   double get gridInterval => _state?._currentGridInterval ?? 100;
   GpsData? getCrosshairCoord() => _state?._getCrosshairCoord();
+
+  // Zoom fit ke koordinat tertentu -- untuk highlight dari list
+  void zoomFitToCoords(List<_LatLon> coords, {double padding = 60}) {
+    _state?.zoomFitToCoords(coords, padding: padding);
+  }
+
+  // Zoom fit ke satu titik (pin)
+  void zoomFitToPoint(double lat, double lon) {
+    _state?.zoomFitToCoords([_LatLon(lat, lon)]);
+  }
 }
 
 class MapCanvas extends StatefulWidget {
   final void Function(double lat, double lon)? onLongPress;
-  final void Function(String id, HighlightType type)? onDoubleTapObject;
+  final void Function(String id, HighlightType type, bool isImport, String? importFileId)? onDoubleTapObject;
   final void Function(String id, HighlightType type, String info)? onTapObject;
   final MapCanvasController? controller;
 
@@ -89,6 +99,66 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     _blinkController.dispose();
     widget.controller?._state = null;
     super.dispose();
+  }
+
+  void zoomFitToCoords(List<_LatLon> coords, {double padding = 60}) {
+    if (coords.isEmpty) return;
+    final gps = context.read<GpsProvider>();
+    final ref = gps.firstFix ?? gps.current;
+    if (ref == null) return;
+    final size = _canvasSize;
+
+    const base = 10.0;
+    const mPerDeg = 111319.9;
+
+    if (coords.length == 1) {
+      // Satu titik -- center saja
+      final dLat = coords[0].lat - ref.latitude;
+      final dLon = coords[0].lon - ref.longitude;
+      final dx = dLon * mPerDeg * math.cos(ref.latitude * math.pi / 180);
+      final dy = -dLat * mPerDeg;
+      setState(() {
+        _offsetX = -(dx / base) * _scale;
+        _offsetY = -(dy / base) * _scale;
+      });
+      return;
+    }
+
+    // Bounding box
+    double minLat = coords[0].lat, maxLat = coords[0].lat;
+    double minLon = coords[0].lon, maxLon = coords[0].lon;
+    for (final c in coords) {
+      if (c.lat < minLat) minLat = c.lat;
+      if (c.lat > maxLat) maxLat = c.lat;
+      if (c.lon < minLon) minLon = c.lon;
+      if (c.lon > maxLon) maxLon = c.lon;
+    }
+
+    final centerLat = (minLat + maxLat) / 2;
+    final centerLon = (minLon + maxLon) / 2;
+
+    // Hitung scale agar fit di layar
+    final dLat = (maxLat - minLat) * mPerDeg;
+    final dLon = (maxLon - minLon) * mPerDeg * math.cos(centerLat * math.pi / 180);
+
+    double newScale = _scale;
+    if (dLat > 0 || dLon > 0) {
+      final scaleX = dLon > 0 ? (size.width - padding * 2) * base / dLon : 2000.0;
+      final scaleY = dLat > 0 ? (size.height - padding * 2) * base / dLat : 2000.0;
+      newScale = math.min(scaleX, scaleY).clamp(0.1, 2000.0);
+    }
+
+    // Offset ke center bounding box
+    final dCLat = centerLat - ref.latitude;
+    final dCLon = centerLon - ref.longitude;
+    final dcx = dCLon * mPerDeg * math.cos(ref.latitude * math.pi / 180);
+    final dcy = -dCLat * mPerDeg;
+
+    setState(() {
+      _scale = newScale;
+      _offsetX = -(dcx / base) * _scale;
+      _offsetY = -(dcy / base) * _scale;
+    });
   }
 
   void zoomIn() => setState(() => _scale = (_scale * 1.585).clamp(0.1, 2000.0));
@@ -351,7 +421,7 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
                 _firstTapPos != null &&
                 (pos - _firstTapPos!).distance < 40;
             if (isDouble) {
-              widget.onDoubleTapObject?.call(hit.id, hit.type);
+              widget.onDoubleTapObject?.call(hit.id, hit.type, hit.isImport, hit.importFileId);
             }
             _tapCount = 0;
             _firstTapTime = null;
@@ -421,6 +491,11 @@ class _HitResult {
   final bool isImport;
   final String? importFileId;
   const _HitResult({required this.id, required this.type, required this.info, required this.name, required this.timestamp, required this.isImport, this.importFileId});
+}
+
+class _LatLon {
+  final double lat, lon;
+  const _LatLon(this.lat, this.lon);
 }
 
 class _MapPainter extends CustomPainter {
