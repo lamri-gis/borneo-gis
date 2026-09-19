@@ -59,14 +59,11 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
   double _currentGridInterval = 100;
   DrawingMode _drawingMode = DrawingMode.none;
   final List<LinePoint> _drawPoints = [];
-  final GlobalKey _canvasKey = GlobalKey();
+  Size _lastKnownSize = Size.zero;
 
-  // Ambil ukuran widget sebenarnya (bukan full screen)
-  Size get _canvasSize {
-    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box != null) return box.size;
-    return MediaQuery.of(context).size;
-  }
+  Size get _canvasSize => _lastKnownSize == Size.zero
+      ? MediaQuery.of(context).size
+      : _lastKnownSize;
 
   // Highlight animation
   late AnimationController _blinkController;
@@ -364,17 +361,19 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     final map = context.watch<MapProvider>();
     final track = context.watch<TrackProvider>();
     final layer = context.watch<LayerProvider>();
-    final size = _canvasSize;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _lastKnownSize = Size(constraints.maxWidth, constraints.maxHeight);
+        final size = _lastKnownSize;
 
-    if (gps.current != null && !_autocentered) {
-      _autocentered = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => snapCrosshairToGps());
-    }
+        if (gps.current != null && !_autocentered) {
+          _autocentered = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) => snapCrosshairToGps());
+        }
 
-    _currentGridInterval = _calcGridInterval();
+        _currentGridInterval = _calcGridInterval();
 
-    return GestureDetector(
-      key: _canvasKey,
+        return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onScaleStart: (d) {
         _startOffX = _offsetX;
@@ -469,6 +468,8 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
         ),
       ),
     );
+      }, // LayoutBuilder builder
+    ); // LayoutBuilder
   }
 
   GpsData _pixelToLatLon(double px, double py, GpsData center, double sw, double sh) {
