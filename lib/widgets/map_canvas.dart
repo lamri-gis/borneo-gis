@@ -68,6 +68,9 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
   // Highlight animation
   late AnimationController _blinkController;
   late Animation<double> _blinkAnim;
+  // Animasi warna untuk kedap-kedip dua warna
+  late Animation<Color?> _blinkColorLineAnim; // hitam-oranye untuk track/line/poly
+  late Animation<Color?> _blinkColorPinAnim;  // merah-biru untuk pin
 
   // Double tap detection
   int _tapCount = 0;
@@ -83,6 +86,8 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     widget.controller?._state = this;
     _blinkController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..repeat(reverse: true);
     _blinkAnim = Tween<double>(begin: 0.3, end: 1.0).animate(_blinkController);
+    _blinkColorLineAnim = ColorTween(begin: Colors.black, end: const Color(0xFFFF6D00)).animate(_blinkController);
+    _blinkColorPinAnim = ColorTween(begin: Colors.red, end: Colors.blue).animate(_blinkController);
   }
 
   @override
@@ -158,8 +163,34 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     });
   }
 
-  void zoomIn() => setState(() => _scale = (_scale * 1.585).clamp(0.1, 2000.0));
-  void zoomOut() => setState(() => _scale = (_scale / 1.585).clamp(0.1, 2000.0));
+  void zoomIn() {
+    final size = _canvasSize;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    // Anchor zoom ke crosshair -- koordinat di tengah layar tidak bergerak
+    final oldScale = _scale;
+    final newScale = (_scale * 1.585).clamp(0.1, 2000.0);
+    final factor = newScale / oldScale;
+    setState(() {
+      _scale = newScale;
+      _offsetX = cx - (cx - _offsetX) * factor;
+      _offsetY = cy - (cy - _offsetY) * factor;
+    });
+  }
+
+  void zoomOut() {
+    final size = _canvasSize;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final oldScale = _scale;
+    final newScale = (_scale / 1.585).clamp(0.1, 2000.0);
+    final factor = newScale / oldScale;
+    setState(() {
+      _scale = newScale;
+      _offsetX = cx - (cx - _offsetX) * factor;
+      _offsetY = cy - (cy - _offsetY) * factor;
+    });
+  }
 
   void setDrawingMode(DrawingMode mode) {
     setState(() { _drawingMode = mode; _drawPoints.clear(); });
@@ -456,6 +487,8 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
             recordingTrack: layer.recordingTrack,
             highlight: layer.highlight,
             blinkValue: _blinkAnim.value,
+            blinkColorLine: _blinkColorLineAnim.value ?? Colors.black,
+            blinkColorPin: _blinkColorPinAnim.value ?? Colors.red,
             drawPoints: _drawPoints,
             drawingMode: _drawingMode,
             scale: _scale,
@@ -510,6 +543,8 @@ class _MapPainter extends CustomPainter {
   final LayerTrack? recordingTrack;
   final HighlightState? highlight;
   final double blinkValue;
+  final Color blinkColorLine;
+  final Color blinkColorPin;
   final List<LinePoint> drawPoints;
   final DrawingMode drawingMode;
   final double scale;
@@ -526,7 +561,8 @@ class _MapPainter extends CustomPainter {
     required this.gpsData, required this.firstFix, required this.pins,
     required this.circles, required this.trackPoints, required this.savedTracks,
     required this.activeLayer, required this.recordingTrack, required this.highlight,
-    required this.blinkValue, required this.drawPoints, required this.drawingMode,
+    required this.blinkValue, required this.blinkColorLine, required this.blinkColorPin,
+    required this.drawPoints, required this.drawingMode,
     required this.scale, required this.offsetX, required this.offsetY,
     required this.screenW, required this.screenH, required this.gridInterval,
   });
@@ -606,7 +642,8 @@ class _MapPainter extends CustomPainter {
   void _drawLayerLines(Canvas canvas, FieldLayer layer) {
     for (final line in layer.lines) {
       if (line.points.length < 2) continue;
-      final opacity = _highlightOpacity(line.id);
+      final isHL = _isHighlighted(line.id);
+      final color = isHL ? blinkColorLine : const Color(0xFF1565C0); // biru gelap default
       final path = Path();
       Offset? mid;
       for (int i = 0; i < line.points.length; i++) {
@@ -614,15 +651,16 @@ class _MapPainter extends CustomPainter {
         if (i == line.points.length ~/ 2) mid = pt;
         if (i == 0) path.moveTo(pt.dx, pt.dy); else path.lineTo(pt.dx, pt.dy);
       }
-      canvas.drawPath(path, Paint()..color = line.color.withOpacity(opacity)..strokeWidth = _isHighlighted(line.id) ? 3 : 2..style = PaintingStyle.stroke);
-      if (_isHighlighted(line.id) && mid != null) _drawInfoLabel(canvas, line.distanceLabel, mid);
+      canvas.drawPath(path, Paint()..color = color..strokeWidth = isHL ? 3 : 2..style = PaintingStyle.stroke);
+      if (isHL && mid != null) _drawInfoLabel(canvas, line.distanceLabel, mid);
     }
   }
 
   void _drawLayerPolygons(Canvas canvas, FieldLayer layer) {
     for (final poly in layer.polygons) {
       if (poly.points.length < 3) continue;
-      final opacity = _highlightOpacity(poly.id);
+      final isHL = _isHighlighted(poly.id);
+      final strokeColor = isHL ? blinkColorLine : const Color(0xFF1565C0); // biru gelap default
       final path = Path();
       Offset center = Offset.zero;
       for (int i = 0; i < poly.points.length; i++) {
@@ -632,17 +670,18 @@ class _MapPainter extends CustomPainter {
       }
       path.close();
       center = center / poly.points.length.toDouble();
-      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(0.2 * opacity)..style = PaintingStyle.fill);
-      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(opacity)..strokeWidth = _isHighlighted(poly.id) ? 3 : 2..style = PaintingStyle.stroke);
-      if (_isHighlighted(poly.id)) _drawInfoLabel(canvas, poly.areaLabel, center);
+      canvas.drawPath(path, Paint()..color = const Color(0xFF1565C0).withOpacity(0.1)..style = PaintingStyle.fill);
+      canvas.drawPath(path, Paint()..color = strokeColor..strokeWidth = isHL ? 3 : 2..style = PaintingStyle.stroke);
+      if (isHL) _drawInfoLabel(canvas, poly.areaLabel, center);
     }
   }
 
   void _drawLayerTracks(Canvas canvas, FieldLayer layer) {
     for (final track in layer.tracks) {
-      final opacity = _highlightOpacity(track.id);
-      _drawLayerTrackPoints(canvas, track.points, track.color.withOpacity(opacity), width: _isHighlighted(track.id) ? 3.5 : 2.5);
-      if (_isHighlighted(track.id) && track.points.length > 1) {
+      final isHL = _isHighlighted(track.id);
+      final color = isHL ? blinkColorLine : const Color(0xFF1565C0); // biru gelap default
+      _drawLayerTrackPoints(canvas, track.points, color, width: isHL ? 3.5 : 2.5);
+      if (isHL && track.points.length > 1) {
         final mid = track.points[track.points.length ~/ 2];
         _drawInfoLabel(canvas, track.distanceLabel, _toScreen(mid.latitude, mid.longitude));
       }
@@ -662,10 +701,11 @@ class _MapPainter extends CustomPainter {
   void _drawLayerPins(Canvas canvas, FieldLayer layer) {
     for (final pin in layer.pins) {
       final pos = _toScreen(pin.latitude, pin.longitude);
-      final opacity = _highlightOpacity(pin.id);
-      final r = _isHighlighted(pin.id) ? 11.0 : 8.0;
-      canvas.drawCircle(pos, r, Paint()..color = pin.color.withOpacity(opacity));
-      canvas.drawCircle(pos, r, Paint()..color = Colors.white.withOpacity(opacity)..strokeWidth = 1.5..style = PaintingStyle.stroke);
+      final isHL = _isHighlighted(pin.id);
+      final color = isHL ? blinkColorPin : Colors.black; // hitam default
+      final r = isHL ? 11.0 : 8.0;
+      canvas.drawCircle(pos, r, Paint()..color = color);
+      canvas.drawCircle(pos, r, Paint()..color = Colors.white..strokeWidth = 1.5..style = PaintingStyle.stroke);
     }
   }
 
