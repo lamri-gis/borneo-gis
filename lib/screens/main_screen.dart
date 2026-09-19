@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart'; 
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../providers/gps_provider.dart';
@@ -16,6 +16,7 @@ import '../utils/kml_importer.dart';
 import 'layer_screen.dart';
 import 'layer_detail_screen.dart';
 import 'coordinate_screen.dart';
+import 'radius_create_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -27,13 +28,51 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final MapCanvasController _mapController = MapCanvasController();
   DrawingMode _drawingMode = DrawingMode.none;
+  bool _layerDialogShown = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GpsProvider>().start();
+      _checkLayerOnStart();
     });
+  }
+
+  void _checkLayerOnStart() {
+    final layer = context.read<LayerProvider>();
+    if (layer.layers.isEmpty && !_layerDialogShown) {
+      _layerDialogShown = true;
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) _showNoLayerDialog();
+      });
+    }
+  }
+
+  void _showNoLayerDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Belum ada Layer', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const Text('Buat layer baru untuk mulai pasang pin, rekam track, buat line dan poligon.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Nanti'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => RadiusCreateScreen(mapController: _mapController)));
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+            child: const Text('Buat Layer'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -91,27 +130,6 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     );
                   }),
-
-                  // Banner tidak ada layer aktif
-                  if (layer.activeLayer == null)
-                    Positioned(
-                      top: 0, left: 0, right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        color: AppColors.warning.withOpacity(0.9),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.layers_outlined, color: Colors.black, size: 16),
-                            const SizedBox(width: 8),
-                            const Expanded(child: Text('Belum ada layer aktif', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w600))),
-                            TextButton(
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LayerScreen())),
-                              child: const Text('Buat Layer', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
 
                   // Kompas
                   Positioned(top: 12, right: 12, child: CompassWidget(heading: gps.heading)),
@@ -185,34 +203,23 @@ class _MainScreenState extends State<MainScreen> {
                 const Text('BorneoGIS Navigator', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
                 Text(
                   layer.activeLayer != null ? layer.activeLayer!.name : 'Tidak ada layer aktif',
-                  style: TextStyle(color: layer.activeLayer != null ? AppColors.primary : AppColors.warning, fontSize: 10),
+                  style: TextStyle(color: layer.activeLayer != null ? AppColors.primary : AppColors.textSecondary, fontSize: 10),
                 ),
               ],
             ),
           ),
-          // Target -- snap crosshair ke GPS
-          IconButton(
-            icon: const Icon(Icons.my_location, color: AppColors.textPrimary, size: 20),
-            onPressed: () => _mapController.centerToGps(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.layers, color: AppColors.textPrimary, size: 20),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LayerScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, color: AppColors.textPrimary, size: 20),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoordinateScreen())),
-          ),
+          IconButton(icon: const Icon(Icons.my_location, color: AppColors.textPrimary, size: 20), onPressed: () => _mapController.centerToGps()),
+          IconButton(icon: const Icon(Icons.layers, color: AppColors.textPrimary, size: 20), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LayerScreen()))),
+          IconButton(icon: const Icon(Icons.search, color: AppColors.textPrimary, size: 20), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoordinateScreen()))),
         ],
       ),
     );
   }
 
-  // Pin dari crosshair
   void _addPinFromCrosshair(BuildContext context) {
     final layer = context.read<LayerProvider>();
     if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
+      _showNoLayerDialog();
       return;
     }
     final coord = _mapController.getCrosshairCoord();
@@ -225,7 +232,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _showPinDialog(BuildContext context, double lat, double lon) {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) return;
+    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
 
     if (!layer.activeLayer!.containsPoint(lat, lon)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -287,7 +294,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Popup info saat klik 1x objek
   void _showObjectPopup(BuildContext context, String id, HighlightType type, String info, LayerProvider layer) {
     if (layer.activeLayer == null) return;
     final al = layer.activeLayer!;
@@ -297,17 +303,25 @@ class _MainScreenState extends State<MainScreen> {
 
     switch (type) {
       case HighlightType.pin:
-        final obj = al.pins.firstWhere((p) => p.id == id, orElse: () => LayerPin(latitude: 0, longitude: 0));
-        name = obj.name; timestamp = obj.createdAt; break;
+        try { final obj = al.pins.firstWhere((p) => p.id == id); name = obj.name; timestamp = obj.createdAt; } catch (_) {
+          for (final imp in al.imports) { try { final obj = imp.pins.firstWhere((p) => p.id == id); name = obj.name; timestamp = obj.createdAt; break; } catch (_) {} }
+        }
+        break;
       case HighlightType.track:
-        final obj = al.tracks.firstWhere((t) => t.id == id, orElse: () => LayerTrack());
-        name = obj.name; timestamp = obj.createdAt; break;
+        try { final obj = al.tracks.firstWhere((t) => t.id == id); name = obj.name; timestamp = obj.createdAt; } catch (_) {
+          for (final imp in al.imports) { try { final obj = imp.tracks.firstWhere((t) => t.id == id); name = obj.name; timestamp = obj.createdAt; break; } catch (_) {} }
+        }
+        break;
       case HighlightType.line:
-        final obj = al.lines.firstWhere((l) => l.id == id, orElse: () => LayerLine());
-        name = obj.name; timestamp = obj.createdAt; break;
+        try { final obj = al.lines.firstWhere((l) => l.id == id); name = obj.name; timestamp = obj.createdAt; } catch (_) {
+          for (final imp in al.imports) { try { final obj = imp.lines.firstWhere((l) => l.id == id); name = obj.name; timestamp = obj.createdAt; break; } catch (_) {} }
+        }
+        break;
       case HighlightType.polygon:
-        final obj = al.polygons.firstWhere((p) => p.id == id, orElse: () => LayerPolygon());
-        name = obj.name; timestamp = obj.createdAt; break;
+        try { final obj = al.polygons.firstWhere((p) => p.id == id); name = obj.name; timestamp = obj.createdAt; } catch (_) {
+          for (final imp in al.imports) { try { final obj = imp.polygons.firstWhere((p) => p.id == id); name = obj.name; timestamp = obj.createdAt; break; } catch (_) {} }
+        }
+        break;
     }
 
     showModalBottomSheet(
@@ -332,24 +346,20 @@ class _MainScreenState extends State<MainScreen> {
               Text(_formatTs(timestamp), style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
             ],
             const SizedBox(height: 8),
-            Text('Double tap objek untuk edit', style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+            const Text('Double tap objek untuk edit', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
           ],
         ),
       ),
     );
   }
 
-  // Masuk detail saat double tap
   void _openObjectDetail(BuildContext context, String id, HighlightType type, LayerProvider layer) {
     if (layer.activeLayer == null) return;
     Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(layerId: layer.activeLayer!.id)));
   }
 
   void _toggleTrack(BuildContext context, LayerProvider layer) {
-    if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
-      return;
-    }
+    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
     if (layer.isRecording) {
       layer.stopRecording();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Track disimpan')));
@@ -360,21 +370,14 @@ class _MainScreenState extends State<MainScreen> {
 
   void _startDrawing(DrawingMode mode) {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
-      return;
-    }
+    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
     setState(() => _drawingMode = mode);
     _mapController.setDrawingMode(mode);
   }
 
-  // Polygon -- pilih satuan dulu
   void _startPolygon(BuildContext context) {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
-      return;
-    }
+    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -383,14 +386,8 @@ class _MainScreenState extends State<MainScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              title: const Text('Hektar (ha)', style: TextStyle(color: AppColors.textPrimary)),
-              onTap: () { Navigator.pop(context); _startDrawingPolygon(AreaUnit.hectare); },
-            ),
-            ListTile(
-              title: const Text('Meter persegi (m²)', style: TextStyle(color: AppColors.textPrimary)),
-              onTap: () { Navigator.pop(context); _startDrawingPolygon(AreaUnit.squareMeter); },
-            ),
+            ListTile(title: const Text('Hektar (ha)', style: TextStyle(color: AppColors.textPrimary)), onTap: () { Navigator.pop(context); _startDrawingPolygon(AreaUnit.hectare); }),
+            ListTile(title: const Text('Meter persegi (m²)', style: TextStyle(color: AppColors.textPrimary)), onTap: () { Navigator.pop(context); _startDrawingPolygon(AreaUnit.squareMeter); }),
           ],
         ),
       ),
@@ -398,7 +395,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _startDrawingPolygon(AreaUnit unit) {
-    // Simpan unit ke provider untuk dipakai saat finishDrawing
     context.read<LayerProvider>().setPendingPolygonUnit(unit);
     setState(() => _drawingMode = DrawingMode.polygon);
     _mapController.setDrawingMode(DrawingMode.polygon);
@@ -406,10 +402,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _importFile(BuildContext context) async {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
-      return;
-    }
+    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['kml', 'KML']);
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
@@ -424,10 +417,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showExport(BuildContext context, LayerProvider layer) {
-    if (layer.activeLayer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Buat layer dulu')));
-      return;
-    }
+    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
     Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(layerId: layer.activeLayer!.id)));
   }
 
