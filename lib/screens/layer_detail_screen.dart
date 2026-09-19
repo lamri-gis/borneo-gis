@@ -119,7 +119,9 @@ class _LayerDetailScreenState extends State<LayerDetailScreen> with SingleTicker
       final ctrl = TextEditingController(text: layer.name);
       final name = await _askFileName(context, ctrl);
       if (name == null) return;
-      final path = await KmlExporter.exportOriginal(layer: layer, type: type, fileName: name);
+      final method = await _askExportMethod(context);
+      if (method == null) return;
+      final path = await KmlExporter.exportOriginal(layer: layer, type: type, fileName: name, method: method, context: context);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(path != null ? 'Disimpan: $path' : 'Export dibatalkan')));
     });
   }
@@ -141,7 +143,9 @@ class _LayerDetailScreenState extends State<LayerDetailScreen> with SingleTicker
                 final ctrl = TextEditingController(text: imp.name);
                 final name = await _askFileName(context, ctrl);
                 if (name == null) return;
-                final path = await KmlExporter.exportImport(importedFile: imp, type: type, fileName: name);
+                final method = await _askExportMethod(context);
+                if (method == null) return;
+                final path = await KmlExporter.exportImport(importedFile: imp, type: type, fileName: name, method: method, context: context);
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(path != null ? 'Disimpan: $path' : 'Export dibatalkan')));
               });
             },
@@ -179,6 +183,32 @@ class _LayerDetailScreenState extends State<LayerDetailScreen> with SingleTicker
       case ExportType.line: return 'Export Line saja';
       case ExportType.polygon: return 'Export Poligon saja';
     }
+  }
+
+  Future<ExportMethod?> _askExportMethod(BuildContext context) async {
+    return showDialog<ExportMethod>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Cara Export', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.save_alt, color: AppColors.primary),
+              title: const Text('Simpan ke penyimpanan', style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () => Navigator.pop(context, ExportMethod.save),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share, color: AppColors.accent),
+              title: const Text('Kirim / Bagikan', style: TextStyle(color: AppColors.textPrimary)),
+              subtitle: const Text('WhatsApp, Email, Bluetooth, dll', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+              onTap: () => Navigator.pop(context, ExportMethod.share),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<String?> _askFileName(BuildContext context, TextEditingController ctrl) async {
