@@ -23,8 +23,6 @@ class MapCanvasController {
   void setDrawingMode(DrawingMode mode) => _state?.setDrawingMode(mode);
   DrawingMode get drawingMode => _state?._drawingMode ?? DrawingMode.none;
   double get gridInterval => _state?._currentGridInterval ?? 100;
-
-  // Koordinat crosshair saat ini
   GpsData? getCrosshairCoord() => _state?._getCrosshairCoord();
 }
 
@@ -57,8 +55,10 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
   late Animation<double> _blinkAnim;
 
   // Double tap detection
-  DateTime? _lastTapTime;
-  Offset? _lastTapPos;
+  int _tapCount = 0;
+  DateTime? _firstTapTime;
+  Offset? _firstTapPos;
+  _HitResult? _pendingHit;
 
   static const List<double> _gridSteps = [1, 10, 100, 1000];
 
@@ -118,24 +118,30 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     setState(() { _drawingMode = DrawingMode.none; _drawPoints.clear(); });
   }
 
-  // Snap crosshair ke GPS -- hanya set offset, peta tidak auto-follow
+  // Fix presisi -- snap crosshair tepat ke posisi GPS
   void snapCrosshairToGps() {
     final gps = context.read<GpsProvider>();
-    if (gps.current == null || gps.firstFix == null) {
-      setState(() { _offsetX = 0; _offsetY = 0; });
-      return;
-    }
+    if (gps.current == null) return;
+
+    final ref = gps.firstFix ?? gps.current!;
     final current = gps.current!;
-    final first = gps.firstFix!;
+
     const base = 10.0;
     const mPerDeg = 111319.9;
-    final dLat = current.latitude - first.latitude;
-    final dLon = current.longitude - first.longitude;
-    final dx = dLon * mPerDeg * math.cos(first.latitude * math.pi / 180);
+
+    // Hitung berapa pixel GPS marker saat ini dari tengah layar
+    final dLat = current.latitude - ref.latitude;
+    final dLon = current.longitude - ref.longitude;
+    final dx = dLon * mPerDeg * math.cos(ref.latitude * math.pi / 180);
     final dy = -dLat * mPerDeg;
+
+    final gpsScreenX = (dx / base) * _scale;
+    final gpsScreenY = (dy / base) * _scale;
+
+    // Set offset agar GPS marker tepat di tengah layar (posisi crosshair)
     setState(() {
-      _offsetX = -(dx / base) * _scale;
-      _offsetY = -(dy / base) * _scale;
+      _offsetX = -gpsScreenX;
+      _offsetY = -gpsScreenY;
     });
   }
 
@@ -157,38 +163,74 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     return _gridSteps.last;
   }
 
-  // Hit test -- cari objek yang paling dekat dengan tap
+  // Hit test -- cari objek paling dekat dari tap
   _HitResult? _hitTest(Offset tapPos, FieldLayer layer, Size size) {
-    const pinRadius = 20.0;
-    const lineThreshold = 15.0;
+    const pinRadius = 24.0;
+    const lineThreshold = 18.0;
 
-    // Pin
+    // Original -- Pin
     for (final pin in layer.pins) {
-      final pos = _toScreenWithRef(pin.latitude, pin.longitude, layer, size);
+      final pos = _toScreen(pin.latitude, pin.longitude);
       if ((pos - tapPos).distance <= pinRadius) {
-        return _HitResult(id: pin.id, type: HighlightType.pin, info: '${pin.latitude.toStringAsFixed(6)}°, ${pin.longitude.toStringAsFixed(6)}°', name: pin.name, timestamp: pin.createdAt);
+        return _HitResult(id: pin.id, type: HighlightType.pin, info: '${pin.latitude.toStringAsFixed(6)}°, ${pin.longitude.toStringAsFixed(6)}°', name: pin.name, timestamp: pin.createdAt, isImport: false);
       }
     }
 
-    // Track
+    // Original -- Track
     for (final track in layer.tracks) {
-      if (_isNearPath(tapPos, track.points.map((p) => _toScreenWithRef(p.latitude, p.longitude, layer, size)).toList(), lineThreshold)) {
-        return _HitResult(id: track.id, type: HighlightType.track, info: track.distanceLabel, name: track.name, timestamp: track.createdAt);
+      final pts = track.points.map((p) => _toScreen(p.latitude, p.longitude)).toList();
+      if (_isNearPath(tapPos, pts, lineThreshold)) {
+        return _HitResult(id: track.id, type: HighlightType.track, info: track.distanceLabel, name: track.name, timestamp: track.createdAt, isImport: false);
       }
     }
 
-    // Line
+    // Original -- Line
     for (final line in layer.lines) {
-      if (_isNearPath(tapPos, line.points.map((p) => _toScreenWithRef(p.latitude, p.longitude, layer, size)).toList(), lineThreshold)) {
-        return _HitResult(id: line.id, type: HighlightType.line, info: line.distanceLabel, name: line.name, timestamp: line.createdAt);
+      final pts = line.points.map((p) => _toScreen(p.latitude, p.longitude)).toList();
+      if (_isNearPath(tapPos, pts, lineThreshold)) {
+        return _HitResult(id: line.id, type: HighlightType.line, info: line.distanceLabel, name: line.name, timestamp: line.createdAt, isImport: false);
       }
     }
 
-    // Poligon
+    // Original -- Poligon
     for (final poly in layer.polygons) {
-      final pts = poly.points.map((p) => _toScreenWithRef(p.latitude, p.longitude, layer, size)).toList();
-      if (_isInsidePolygon(tapPos, pts) || _isNearPath(tapPos, [...pts, pts.first], lineThreshold)) {
-        return _HitResult(id: poly.id, type: HighlightType.polygon, info: poly.areaLabel, name: poly.name, timestamp: poly.createdAt);
+      final pts = poly.points.map((p) => _toScreen(p.latitude, p.longitude)).toList();
+      if (_isInsidePolygon(tapPos, pts) || _isNearPath(tapPos, [...pts, if (pts.isNotEmpty) pts.first], lineThreshold)) {
+        return _HitResult(id: poly.id, type: HighlightType.polygon, info: poly.areaLabel, name: poly.name, timestamp: poly.createdAt, isImport: false);
+      }
+    }
+
+    // Import -- Pin
+    for (final imp in layer.imports) {
+      for (final pin in imp.pins) {
+        final pos = _toScreen(pin.latitude, pin.longitude);
+        if ((pos - tapPos).distance <= pinRadius) {
+          return _HitResult(id: pin.id, type: HighlightType.pin, info: '${pin.latitude.toStringAsFixed(6)}°, ${pin.longitude.toStringAsFixed(6)}°', name: pin.name, timestamp: pin.createdAt, isImport: true, importFileId: imp.id);
+        }
+      }
+
+      // Import -- Track
+      for (final track in imp.tracks) {
+        final pts = track.points.map((p) => _toScreen(p.latitude, p.longitude)).toList();
+        if (_isNearPath(tapPos, pts, lineThreshold)) {
+          return _HitResult(id: track.id, type: HighlightType.track, info: track.distanceLabel, name: track.name, timestamp: track.createdAt, isImport: true, importFileId: imp.id);
+        }
+      }
+
+      // Import -- Line
+      for (final line in imp.lines) {
+        final pts = line.points.map((p) => _toScreen(p.latitude, p.longitude)).toList();
+        if (_isNearPath(tapPos, pts, lineThreshold)) {
+          return _HitResult(id: line.id, type: HighlightType.line, info: line.distanceLabel, name: line.name, timestamp: line.createdAt, isImport: true, importFileId: imp.id);
+        }
+      }
+
+      // Import -- Poligon
+      for (final poly in imp.polygons) {
+        final pts = poly.points.map((p) => _toScreen(p.latitude, p.longitude)).toList();
+        if (_isInsidePolygon(tapPos, pts) || _isNearPath(tapPos, [...pts, if (pts.isNotEmpty) pts.first], lineThreshold)) {
+          return _HitResult(id: poly.id, type: HighlightType.polygon, info: poly.areaLabel, name: poly.name, timestamp: poly.createdAt, isImport: true, importFileId: imp.id);
+        }
       }
     }
 
@@ -225,19 +267,17 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     return inside;
   }
 
-  Offset _toScreenWithRef(double lat, double lon, FieldLayer layer, Size size) {
-    final ref = context.read<GpsProvider>().firstFix ?? context.read<GpsProvider>().current;
+  Offset _toScreen(double lat, double lon) {
+    final gps = context.read<GpsProvider>();
+    final ref = gps.firstFix ?? gps.current;
     if (ref == null) return Offset.zero;
-    return _toScreenFromRef(lat, lon, ref, size);
-  }
-
-  Offset _toScreenFromRef(double lat, double lon, GpsData ref, Size size) {
     const base = 10.0;
     const mPerDeg = 111319.9;
     final dLat = lat - ref.latitude;
     final dLon = lon - ref.longitude;
     final dx = dLon * mPerDeg * math.cos(ref.latitude * math.pi / 180);
     final dy = -dLat * mPerDeg;
+    final size = MediaQuery.of(context).size;
     return Offset(
       size.width / 2 + (dx / base) * _scale + _offsetX,
       size.height / 2 + (dy / base) * _scale + _offsetY,
@@ -275,34 +315,54 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
         });
       },
       onTapUp: (d) {
+        if (layer.activeLayer == null) return;
+        final hit = _hitTest(d.localPosition, layer.activeLayer!, size);
+
         final now = DateTime.now();
         final pos = d.localPosition;
-        final isDouble = _lastTapTime != null &&
-            now.difference(_lastTapTime!).inMilliseconds < 300 &&
-            _lastTapPos != null &&
-            (pos - _lastTapPos!).distance < 30;
 
-        if (layer.activeLayer != null) {
-          final hit = _hitTest(pos, layer.activeLayer!, size);
-          if (hit != null) {
+        if (hit != null) {
+          _tapCount++;
+          if (_tapCount == 1) {
+            _firstTapTime = now;
+            _firstTapPos = pos;
+            _pendingHit = hit;
+            // Tunggu kemungkinan tap kedua
+            Future.delayed(const Duration(milliseconds: 350), () {
+              if (_tapCount == 1) {
+                // Single tap
+                widget.onTapObject?.call(hit.id, hit.type, hit.info);
+                layer.setHighlight(hit.id, hit.type);
+              }
+              _tapCount = 0;
+              _firstTapTime = null;
+              _firstTapPos = null;
+              _pendingHit = null;
+            });
+          } else if (_tapCount == 2) {
+            // Double tap
+            final isDouble = _firstTapTime != null &&
+                now.difference(_firstTapTime!).inMilliseconds < 400 &&
+                _firstTapPos != null &&
+                (pos - _firstTapPos!).distance < 40;
             if (isDouble) {
               widget.onDoubleTapObject?.call(hit.id, hit.type);
-            } else {
-              widget.onTapObject?.call(hit.id, hit.type, hit.info);
-              layer.setHighlight(hit.id, hit.type);
             }
-            _lastTapTime = null;
-            _lastTapPos = null;
-            return;
+            _tapCount = 0;
+            _firstTapTime = null;
+            _firstTapPos = null;
+            _pendingHit = null;
           }
+        } else {
+          _tapCount = 0;
+          _firstTapTime = null;
+          _firstTapPos = null;
+          _pendingHit = null;
+          layer.clearHighlight();
         }
-
-        _lastTapTime = now;
-        _lastTapPos = pos;
-        layer.clearHighlight();
       },
       onLongPressStart: (d) {
-        if (widget.onLongPress != null && gps.current != null) {
+        if (widget.onLongPress != null) {
           final coord = _getCrosshairCoord();
           if (coord != null) widget.onLongPress!(coord.latitude, coord.longitude);
         }
@@ -353,7 +413,9 @@ class _HitResult {
   final String info;
   final String name;
   final DateTime timestamp;
-  const _HitResult({required this.id, required this.type, required this.info, required this.name, required this.timestamp});
+  final bool isImport;
+  final String? importFileId;
+  const _HitResult({required this.id, required this.type, required this.info, required this.name, required this.timestamp, required this.isImport, this.importFileId});
 }
 
 class _MapPainter extends CustomPainter {
@@ -404,7 +466,6 @@ class _MapPainter extends CustomPainter {
   double _metersToPixels(double meters) => (meters / _base) * scale;
 
   bool _isHighlighted(String id) => highlight?.id == id;
-
   double _highlightOpacity(String id) => _isHighlighted(id) ? blinkValue : 1.0;
 
   @override
@@ -437,9 +498,8 @@ class _MapPainter extends CustomPainter {
     }
 
     if (drawPoints.isNotEmpty) _drawPreview(canvas);
-
     _drawGpsMarker(canvas, _toScreen(gpsData!.latitude, gpsData!.longitude));
-    _drawGridLabel(canvas, size);
+    // Label grid DIHAPUS dari canvas -- cukup di GPS panel bawah
   }
 
   void _drawGrid(Canvas canvas, Size size) {
@@ -452,16 +512,6 @@ class _MapPainter extends CustomPainter {
     while (x < size.width) { canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint); x += spacing; }
     double y = cy % spacing;
     while (y < size.height) { canvas.drawLine(Offset(0, y), Offset(size.width, y), paint); y += spacing; }
-  }
-
-  void _drawGridLabel(Canvas canvas, Size size) {
-    final meters = gridInterval;
-    final label = '⊞ ${meters >= 1000 ? '${(meters/1000).toStringAsFixed(0)} km' : '${meters.toInt()} m'}';
-    final tp = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)), textDirection: TextDirection.ltr)..layout();
-    const p = 8.0;
-    final x = p; final y = size.height - tp.height - p;
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x-4, y-3, tp.width+8, tp.height+6), const Radius.circular(4)), Paint()..color = Colors.black.withOpacity(0.4));
-    tp.paint(canvas, Offset(x, y));
   }
 
   void _drawRadius(Canvas canvas, FieldLayer layer) {
@@ -477,12 +527,14 @@ class _MapPainter extends CustomPainter {
       if (line.points.length < 2) continue;
       final opacity = _highlightOpacity(line.id);
       final path = Path();
+      Offset? mid;
       for (int i = 0; i < line.points.length; i++) {
         final pt = _toScreen(line.points[i].latitude, line.points[i].longitude);
+        if (i == line.points.length ~/ 2) mid = pt;
         if (i == 0) path.moveTo(pt.dx, pt.dy); else path.lineTo(pt.dx, pt.dy);
       }
       canvas.drawPath(path, Paint()..color = line.color.withOpacity(opacity)..strokeWidth = _isHighlighted(line.id) ? 3 : 2..style = PaintingStyle.stroke);
-      if (_isHighlighted(line.id)) _drawInfoLabel(canvas, line.distanceLabel, _toScreen(line.points[line.points.length~/2].latitude, line.points[line.points.length~/2].longitude));
+      if (_isHighlighted(line.id) && mid != null) _drawInfoLabel(canvas, line.distanceLabel, mid);
     }
   }
 
@@ -539,38 +591,56 @@ class _MapPainter extends CustomPainter {
   void _drawImportLines(Canvas canvas, ImportedFile imp) {
     for (final line in imp.lines) {
       if (line.points.length < 2) continue;
+      final opacity = _highlightOpacity(line.id);
       final path = Path();
+      Offset? mid;
       for (int i = 0; i < line.points.length; i++) {
         final pt = _toScreen(line.points[i].latitude, line.points[i].longitude);
+        if (i == line.points.length ~/ 2) mid = pt;
         if (i == 0) path.moveTo(pt.dx, pt.dy); else path.lineTo(pt.dx, pt.dy);
       }
-      canvas.drawPath(path, Paint()..color = line.color.withOpacity(0.7)..strokeWidth = 1.5..style = PaintingStyle.stroke);
+      canvas.drawPath(path, Paint()..color = line.color.withOpacity(0.7 * opacity)..strokeWidth = _isHighlighted(line.id) ? 3 : 1.5..style = PaintingStyle.stroke);
+      if (_isHighlighted(line.id) && mid != null) _drawInfoLabel(canvas, line.distanceLabel, mid);
     }
   }
 
   void _drawImportPolygons(Canvas canvas, ImportedFile imp) {
     for (final poly in imp.polygons) {
       if (poly.points.length < 3) continue;
+      final opacity = _highlightOpacity(poly.id);
       final path = Path();
+      Offset center = Offset.zero;
       for (int i = 0; i < poly.points.length; i++) {
         final pt = _toScreen(poly.points[i].latitude, poly.points[i].longitude);
+        center += pt;
         if (i == 0) path.moveTo(pt.dx, pt.dy); else path.lineTo(pt.dx, pt.dy);
       }
       path.close();
-      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(0.15)..style = PaintingStyle.fill);
-      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(0.7)..strokeWidth = 1.5..style = PaintingStyle.stroke);
+      center = center / poly.points.length.toDouble();
+      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(0.15 * opacity)..style = PaintingStyle.fill);
+      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(0.7 * opacity)..strokeWidth = _isHighlighted(poly.id) ? 3 : 1.5..style = PaintingStyle.stroke);
+      if (_isHighlighted(poly.id)) _drawInfoLabel(canvas, poly.areaLabel, center);
     }
   }
 
   void _drawImportTracks(Canvas canvas, ImportedFile imp) {
-    for (final track in imp.tracks) _drawLayerTrackPoints(canvas, track.points, track.color.withOpacity(0.7));
+    for (final track in imp.tracks) {
+      final opacity = _highlightOpacity(track.id);
+      _drawLayerTrackPoints(canvas, track.points, track.color.withOpacity(0.7 * opacity), width: _isHighlighted(track.id) ? 3.5 : 1.5);
+      if (_isHighlighted(track.id) && track.points.length > 1) {
+        final mid = track.points[track.points.length ~/ 2];
+        _drawInfoLabel(canvas, track.distanceLabel, _toScreen(mid.latitude, mid.longitude));
+      }
+    }
   }
 
   void _drawImportPins(Canvas canvas, ImportedFile imp) {
     for (final pin in imp.pins) {
       final pos = _toScreen(pin.latitude, pin.longitude);
-      canvas.drawCircle(pos, 6, Paint()..color = pin.color.withOpacity(0.8));
-      canvas.drawCircle(pos, 6, Paint()..color = Colors.white..strokeWidth = 1..style = PaintingStyle.stroke);
+      final opacity = _highlightOpacity(pin.id);
+      final r = _isHighlighted(pin.id) ? 10.0 : 6.0;
+      canvas.drawCircle(pos, r, Paint()..color = pin.color.withOpacity(0.8 * opacity));
+      canvas.drawCircle(pos, r, Paint()..color = Colors.white..strokeWidth = 1..style = PaintingStyle.stroke);
     }
   }
 
