@@ -26,13 +26,13 @@ class MapCanvasController {
   GpsData? getCrosshairCoord() => _state?._getCrosshairCoord();
 
   // Zoom fit ke koordinat tertentu -- untuk highlight dari list
-  void zoomFitToCoords(List<_LatLon> coords, {double padding = 60}) {
+  void zoomFitToCoords(List<LatLon> coords, {double padding = 60}) {
     _state?.zoomFitToCoords(coords, padding: padding);
   }
 
   // Zoom fit ke satu titik (pin)
   void zoomFitToPoint(double lat, double lon) {
-    _state?.zoomFitToCoords([_LatLon(lat, lon)]);
+    _state?.zoomFitToCoords([LatLon(lat, lon)]);
   }
 }
 
@@ -103,7 +103,7 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void zoomFitToCoords(List<_LatLon> coords, {double padding = 60}) {
+  void zoomFitToCoords(List<LatLon> coords, {double padding = 60}) {
     if (coords.isEmpty) return;
     final gps = context.read<GpsProvider>();
     final ref = gps.firstFix ?? gps.current;
@@ -527,9 +527,13 @@ class _HitResult {
   const _HitResult({required this.id, required this.type, required this.info, required this.name, required this.timestamp, required this.isImport, this.importFileId});
 }
 
-class _LatLon {
+class LatLon {
   final double lat, lon;
-  const _LatLon(this.lat, this.lon);
+  const LatLon(this.lat, this.lon);
+}
+
+class _LatLon extends LatLon {
+  const _LatLon(super.lat, super.lon);
 }
 
 class _MapPainter extends CustomPainter {
