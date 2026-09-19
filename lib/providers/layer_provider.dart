@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/layer_models.dart';
 
@@ -174,7 +175,30 @@ class LayerProvider extends ChangeNotifier {
       name: name ?? defaultName('track', now),
       isRecording: true,
     );
+    _startForegroundService();
     notifyListeners();
+  }
+
+  void _startForegroundService() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'borneogis_track',
+        channelName: 'BorneoGIS Track Recording',
+        channelDescription: 'Notifikasi saat merekam track GPS',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(1000),
+        autoRunOnBoot: false,
+        allowWakeLock: true,
+      ),
+    );
+    FlutterForegroundTask.startService(
+      notificationTitle: 'BorneoGIS Navigator',
+      notificationText: 'Merekam track GPS...',
+    );
   }
 
   void addTrackPoint(LayerTrackPoint point) {
@@ -188,6 +212,19 @@ class LayerProvider extends ChangeNotifier {
     _recordingTrack!.isRecording = false;
     _activeLayer!.tracks.add(_recordingTrack!);
     _recordingTrack = null;
+    FlutterForegroundTask.stopService();
+    await _save();
+    notifyListeners();
+  }
+
+  // Auto-save saat GPS mati atau HP mati -- dipanggil dari GpsProvider
+  Future<void> autoSaveTrack() async {
+    if (_recordingTrack == null || _activeLayer == null) return;
+    if (_recordingTrack!.points.isEmpty) return;
+    _recordingTrack!.isRecording = false;
+    _activeLayer!.tracks.add(_recordingTrack!);
+    _recordingTrack = null;
+    FlutterForegroundTask.stopService();
     await _save();
     notifyListeners();
   }
