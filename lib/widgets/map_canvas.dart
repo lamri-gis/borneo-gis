@@ -49,6 +49,14 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
   double _currentGridInterval = 100;
   DrawingMode _drawingMode = DrawingMode.none;
   final List<LinePoint> _drawPoints = [];
+  final GlobalKey _canvasKey = GlobalKey();
+
+  // Ambil ukuran widget sebenarnya (bukan full screen)
+  Size get _canvasSize {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null) return box.size;
+    return MediaQuery.of(context).size;
+  }
 
   // Highlight animation
   late AnimationController _blinkController;
@@ -118,7 +126,6 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     setState(() { _drawingMode = DrawingMode.none; _drawPoints.clear(); });
   }
 
-  // Fix presisi -- snap crosshair tepat ke posisi GPS
   void snapCrosshairToGps() {
     final gps = context.read<GpsProvider>();
     if (gps.current == null) return;
@@ -129,7 +136,6 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     const base = 10.0;
     const mPerDeg = 111319.9;
 
-    // Hitung berapa pixel GPS marker saat ini dari tengah layar
     final dLat = current.latitude - ref.latitude;
     final dLon = current.longitude - ref.longitude;
     final dx = dLon * mPerDeg * math.cos(ref.latitude * math.pi / 180);
@@ -138,19 +144,17 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     final gpsScreenX = (dx / base) * _scale;
     final gpsScreenY = (dy / base) * _scale;
 
-    // Set offset agar GPS marker tepat di tengah layar (posisi crosshair)
     setState(() {
       _offsetX = -gpsScreenX;
       _offsetY = -gpsScreenY;
     });
   }
 
-  // Ambil koordinat dari posisi crosshair (tengah layar)
   GpsData? _getCrosshairCoord() {
     final gps = context.read<GpsProvider>();
     final ref = gps.firstFix ?? gps.current;
     if (ref == null) return null;
-    final size = MediaQuery.of(context).size;
+    final size = _canvasSize;
     return _pixelToLatLon(size.width / 2, size.height / 2, ref, size.width, size.height);
   }
 
@@ -277,7 +281,7 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     final dLon = lon - ref.longitude;
     final dx = dLon * mPerDeg * math.cos(ref.latitude * math.pi / 180);
     final dy = -dLat * mPerDeg;
-    final size = MediaQuery.of(context).size;
+    final size = _canvasSize;
     return Offset(
       size.width / 2 + (dx / base) * _scale + _offsetX,
       size.height / 2 + (dy / base) * _scale + _offsetY,
@@ -290,7 +294,7 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     final map = context.watch<MapProvider>();
     final track = context.watch<TrackProvider>();
     final layer = context.watch<LayerProvider>();
-    final size = MediaQuery.of(context).size;
+    final size = _canvasSize;
 
     if (gps.current != null && !_autocentered) {
       _autocentered = true;
@@ -300,6 +304,7 @@ class _MapCanvasState extends State<MapCanvas> with TickerProviderStateMixin {
     _currentGridInterval = _calcGridInterval();
 
     return GestureDetector(
+      key: _canvasKey,
       behavior: HitTestBehavior.opaque,
       onScaleStart: (d) {
         _startOffX = _offsetX;
