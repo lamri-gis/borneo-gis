@@ -9,7 +9,19 @@ import '../utils/kml_exporter.dart';
 
 class LayerDetailScreen extends StatefulWidget {
   final String layerId;
-  const LayerDetailScreen({super.key, required this.layerId});
+  final String? focusId;
+  final HighlightType? focusType;
+  final bool isImport;
+  final String? importFileId;
+
+  const LayerDetailScreen({
+    super.key,
+    required this.layerId,
+    this.focusId,
+    this.focusType,
+    this.isImport = false,
+    this.importFileId,
+  });
 
   @override
   State<LayerDetailScreen> createState() => _LayerDetailScreenState();
@@ -21,7 +33,8 @@ class _LayerDetailScreenState extends State<LayerDetailScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // Kalau dari import, buka tab Import (index 1), kalau original buka tab Original (index 0)
+    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.isImport ? 1 : 0);
   }
 
   @override
@@ -66,8 +79,19 @@ class _LayerDetailScreenState extends State<LayerDetailScreen> with SingleTicker
         body: TabBarView(
           controller: _tabController,
           children: [
-            _OriginalTab(layer: layer, layerId: widget.layerId),
-            _ImportTab(layer: layer, layerId: widget.layerId),
+            _OriginalTab(
+              layer: layer,
+              layerId: widget.layerId,
+              focusId: widget.isImport ? null : widget.focusId,
+              focusType: widget.isImport ? null : widget.focusType,
+            ),
+            _ImportTab(
+              layer: layer,
+              layerId: widget.layerId,
+              focusId: widget.isImport ? widget.focusId : null,
+              focusType: widget.isImport ? widget.focusType : null,
+              focusFileId: widget.importFileId,
+            ),
           ],
         ),
       );
@@ -232,7 +256,10 @@ class _LayerDetailScreenState extends State<LayerDetailScreen> with SingleTicker
 class _OriginalTab extends StatefulWidget {
   final FieldLayer layer;
   final String layerId;
-  const _OriginalTab({required this.layer, required this.layerId});
+  final String? focusId;
+  final HighlightType? focusType;
+
+  const _OriginalTab({required this.layer, required this.layerId, this.focusId, this.focusType});
 
   @override
   State<_OriginalTab> createState() => _OriginalTabState();
@@ -244,7 +271,13 @@ class _OriginalTabState extends State<_OriginalTab> with SingleTickerProviderSta
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    // Auto pilih tab sesuai tipe objek yang difokus
+    int initialIndex = 0;
+    if (widget.focusType == HighlightType.track) initialIndex = 0;
+    else if (widget.focusType == HighlightType.pin) initialIndex = 1;
+    else if (widget.focusType == HighlightType.line) initialIndex = 2;
+    else if (widget.focusType == HighlightType.polygon) initialIndex = 3;
+    _tab = TabController(length: 4, vsync: this, initialIndex: initialIndex);
   }
 
   @override
@@ -294,10 +327,10 @@ class _OriginalTabState extends State<_OriginalTab> with SingleTickerProviderSta
           child: TabBarView(
             controller: _tab,
             children: [
-              _TrackList(layer: layer, layerId: widget.layerId),
-              _PinList(layer: layer, layerId: widget.layerId),
-              _LineList(layer: layer, layerId: widget.layerId),
-              _PolygonList(layer: layer, layerId: widget.layerId),
+              _TrackList(layer: layer, layerId: widget.layerId, focusId: widget.focusId),
+              _PinList(layer: layer, layerId: widget.layerId, focusId: widget.focusId),
+              _LineList(layer: layer, layerId: widget.layerId, focusId: widget.focusId),
+              _PolygonList(layer: layer, layerId: widget.layerId, focusId: widget.focusId),
             ],
           ),
         ),
@@ -340,7 +373,8 @@ class _OriginalTabState extends State<_OriginalTab> with SingleTickerProviderSta
 class _TrackList extends StatelessWidget {
   final FieldLayer layer;
   final String layerId;
-  const _TrackList({required this.layer, required this.layerId});
+  final String? focusId;
+  const _TrackList({required this.layer, required this.layerId, this.focusId});
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +387,7 @@ class _TrackList extends StatelessWidget {
         final t = layer.tracks[i];
         return _ItemCard(
           name: t.name, subtitle: t.distanceLabel, color: t.color, timestamp: t.createdAt,
+          isFocused: focusId == t.id,
           onTap: () => _highlightAndPop(context, t.id, HighlightType.track),
           onRename: (name) => context.read<LayerProvider>().renameTrack(layerId, t.id, name),
           onColorChange: (c) => context.read<LayerProvider>().updateTrackColor(layerId, t.id, c),
@@ -366,7 +401,8 @@ class _TrackList extends StatelessWidget {
 class _PinList extends StatelessWidget {
   final FieldLayer layer;
   final String layerId;
-  const _PinList({required this.layer, required this.layerId});
+  final String? focusId;
+  const _PinList({required this.layer, required this.layerId, this.focusId});
 
   @override
   Widget build(BuildContext context) {
@@ -379,6 +415,7 @@ class _PinList extends StatelessWidget {
         final p = layer.pins[i];
         return _ItemCard(
           name: p.name, subtitle: '${p.latitude.toStringAsFixed(6)}°, ${p.longitude.toStringAsFixed(6)}°', color: p.color, timestamp: p.createdAt,
+          isFocused: focusId == p.id,
           onTap: () => _highlightAndPop(context, p.id, HighlightType.pin),
           onRename: (name) => context.read<LayerProvider>().renamePin(layerId, p.id, name),
           onColorChange: (c) => context.read<LayerProvider>().updatePinColor(layerId, p.id, c),
@@ -392,7 +429,8 @@ class _PinList extends StatelessWidget {
 class _LineList extends StatelessWidget {
   final FieldLayer layer;
   final String layerId;
-  const _LineList({required this.layer, required this.layerId});
+  final String? focusId;
+  const _LineList({required this.layer, required this.layerId, this.focusId});
 
   @override
   Widget build(BuildContext context) {
@@ -405,6 +443,7 @@ class _LineList extends StatelessWidget {
         final l = layer.lines[i];
         return _ItemCard(
           name: l.name, subtitle: l.distanceLabel, color: l.color, timestamp: l.createdAt,
+          isFocused: focusId == l.id,
           onTap: () => _highlightAndPop(context, l.id, HighlightType.line),
           onRename: (name) => context.read<LayerProvider>().renameLine(layerId, l.id, name),
           onColorChange: (c) => context.read<LayerProvider>().updateLineColor(layerId, l.id, c),
@@ -418,7 +457,8 @@ class _LineList extends StatelessWidget {
 class _PolygonList extends StatelessWidget {
   final FieldLayer layer;
   final String layerId;
-  const _PolygonList({required this.layer, required this.layerId});
+  final String? focusId;
+  const _PolygonList({required this.layer, required this.layerId, this.focusId});
 
   @override
   Widget build(BuildContext context) {
@@ -431,6 +471,7 @@ class _PolygonList extends StatelessWidget {
         final p = layer.polygons[i];
         return _ItemCard(
           name: p.name, subtitle: p.areaLabel, color: p.color, timestamp: p.createdAt,
+          isFocused: focusId == p.id,
           onTap: () => _highlightAndPop(context, p.id, HighlightType.polygon),
           onRename: (name) => context.read<LayerProvider>().renamePolygon(layerId, p.id, name),
           onColorChange: (c) => context.read<LayerProvider>().updatePolygonColor(layerId, p.id, c),
@@ -441,9 +482,8 @@ class _PolygonList extends StatelessWidget {
   }
 }
 
-// Highlight objek dan kembali ke peta
-void _highlightAndPop(BuildContext context, String id, HighlightType type) {
-  context.read<LayerProvider>().setHighlight(id, type);
+void _highlightAndPop(BuildContext context, String id, HighlightType type, {String? fileId}) {
+  context.read<LayerProvider>().setHighlightWithFile(id, type, fileId: fileId);
   Navigator.of(context).popUntil((route) => route.isFirst);
 }
 
@@ -452,7 +492,11 @@ void _highlightAndPop(BuildContext context, String id, HighlightType type) {
 class _ImportTab extends StatelessWidget {
   final FieldLayer layer;
   final String layerId;
-  const _ImportTab({required this.layer, required this.layerId});
+  final String? focusId;
+  final HighlightType? focusType;
+  final String? focusFileId;
+
+  const _ImportTab({required this.layer, required this.layerId, this.focusId, this.focusType, this.focusFileId});
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +505,13 @@ class _ImportTab extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       itemCount: layer.imports.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _ImportFileCard(imp: layer.imports[i], layerId: layerId),
+      itemBuilder: (_, i) => _ImportFileCard(
+        imp: layer.imports[i],
+        layerId: layerId,
+        focusId: focusFileId == layer.imports[i].id ? focusId : null,
+        focusType: focusFileId == layer.imports[i].id ? focusType : null,
+        autoExpand: focusFileId == layer.imports[i].id,
+      ),
     );
   }
 }
@@ -469,7 +519,11 @@ class _ImportTab extends StatelessWidget {
 class _ImportFileCard extends StatefulWidget {
   final ImportedFile imp;
   final String layerId;
-  const _ImportFileCard({required this.imp, required this.layerId});
+  final String? focusId;
+  final HighlightType? focusType;
+  final bool autoExpand;
+
+  const _ImportFileCard({required this.imp, required this.layerId, this.focusId, this.focusType, this.autoExpand = false});
 
   @override
   State<_ImportFileCard> createState() => _ImportFileCardState();
@@ -477,10 +531,19 @@ class _ImportFileCard extends StatefulWidget {
 
 class _ImportFileCardState extends State<_ImportFileCard> with SingleTickerProviderStateMixin {
   late TabController _tab;
-  bool _expanded = false;
+  late bool _expanded;
 
   @override
-  void initState() { super.initState(); _tab = TabController(length: 4, vsync: this); }
+  void initState() {
+    super.initState();
+    _expanded = widget.autoExpand;
+    int initialIndex = 0;
+    if (widget.focusType == HighlightType.track) initialIndex = 0;
+    else if (widget.focusType == HighlightType.pin) initialIndex = 1;
+    else if (widget.focusType == HighlightType.line) initialIndex = 2;
+    else if (widget.focusType == HighlightType.polygon) initialIndex = 3;
+    _tab = TabController(length: 4, vsync: this, initialIndex: initialIndex);
+  }
 
   @override
   void dispose() { _tab.dispose(); super.dispose(); }
@@ -488,18 +551,34 @@ class _ImportFileCardState extends State<_ImportFileCard> with SingleTickerProvi
   @override
   Widget build(BuildContext context) {
     final imp = widget.imp;
+    final lp = context.read<LayerProvider>();
+    final isFileHighlighted = lp.highlightedFileId == imp.id;
+
     return Container(
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.divider)),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isFileHighlighted ? AppColors.accent : AppColors.divider, width: isFileHighlighted ? 2 : 1),
+      ),
       child: Column(
         children: [
           ListTile(
-            leading: const Icon(Icons.folder_zip_outlined, color: AppColors.accent, size: 20),
-            title: Text(imp.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            leading: Icon(Icons.folder_zip_outlined, color: isFileHighlighted ? AppColors.accent : AppColors.textSecondary, size: 20),
+            title: Text(imp.name, style: TextStyle(color: isFileHighlighted ? AppColors.accent : AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
             subtitle: Text('${imp.pins.length} pin  ${imp.tracks.length} track  ${imp.lines.length} line  ${imp.polygons.length} poly', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18), onPressed: () => context.read<LayerProvider>().removeImport(widget.layerId, imp.id)),
+                // Highlight semua objek dalam file ini
+                IconButton(
+                  icon: const Icon(Icons.location_searching, color: AppColors.accent, size: 18),
+                  onPressed: () {
+                    // Highlight file -- kembali ke peta
+                    lp.setHighlightWithFile(imp.id, HighlightType.track, fileId: imp.id);
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                ),
+                IconButton(icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18), onPressed: () => lp.removeImport(widget.layerId, imp.id)),
                 IconButton(icon: Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 18), onPressed: () => setState(() => _expanded = !_expanded)),
               ],
             ),
@@ -513,17 +592,22 @@ class _ImportFileCardState extends State<_ImportFileCard> with SingleTickerProvi
               labelColor: AppColors.accent,
               unselectedLabelColor: AppColors.textSecondary,
               labelStyle: const TextStyle(fontSize: 11),
-              tabs: [Tab(text: 'Track (${imp.tracks.length})'), Tab(text: 'Pin (${imp.pins.length})'), Tab(text: 'Line (${imp.lines.length})'), Tab(text: 'Poly (${imp.polygons.length})')],
+              tabs: [
+                Tab(text: 'Track (${imp.tracks.length})'),
+                Tab(text: 'Pin (${imp.pins.length})'),
+                Tab(text: 'Line (${imp.lines.length})'),
+                Tab(text: 'Poly (${imp.polygons.length})'),
+              ],
             ),
             SizedBox(
               height: 200,
               child: TabBarView(
                 controller: _tab,
                 children: [
-                  _ImportItemList(items: imp.tracks.map((t) => _ItemData(t.name, t.distanceLabel, t.color, t.createdAt)).toList()),
-                  _ImportItemList(items: imp.pins.map((p) => _ItemData(p.name, '${p.latitude.toStringAsFixed(5)}°, ${p.longitude.toStringAsFixed(5)}°', p.color, p.createdAt)).toList()),
-                  _ImportItemList(items: imp.lines.map((l) => _ItemData(l.name, l.distanceLabel, l.color, l.createdAt)).toList()),
-                  _ImportItemList(items: imp.polygons.map((p) => _ItemData(p.name, p.areaLabel, p.color, p.createdAt)).toList()),
+                  _ImportItemList(items: imp.tracks.map((t) => _ItemData(t.id, t.name, t.distanceLabel, t.color, t.createdAt, HighlightType.track)).toList(), layerId: widget.layerId, fileId: imp.id, focusId: widget.focusId),
+                  _ImportItemList(items: imp.pins.map((p) => _ItemData(p.id, p.name, '${p.latitude.toStringAsFixed(5)}°, ${p.longitude.toStringAsFixed(5)}°', p.color, p.createdAt, HighlightType.pin)).toList(), layerId: widget.layerId, fileId: imp.id, focusId: widget.focusId),
+                  _ImportItemList(items: imp.lines.map((l) => _ItemData(l.id, l.name, l.distanceLabel, l.color, l.createdAt, HighlightType.line)).toList(), layerId: widget.layerId, fileId: imp.id, focusId: widget.focusId),
+                  _ImportItemList(items: imp.polygons.map((p) => _ItemData(p.id, p.name, p.areaLabel, p.color, p.createdAt, HighlightType.polygon)).toList(), layerId: widget.layerId, fileId: imp.id, focusId: widget.focusId),
                 ],
               ),
             ),
@@ -535,15 +619,20 @@ class _ImportFileCardState extends State<_ImportFileCard> with SingleTickerProvi
 }
 
 class _ItemData {
-  final String name, subtitle;
+  final String id, name, subtitle;
   final Color color;
   final DateTime createdAt;
-  const _ItemData(this.name, this.subtitle, this.color, this.createdAt);
+  final HighlightType type;
+  const _ItemData(this.id, this.name, this.subtitle, this.color, this.createdAt, this.type);
 }
 
 class _ImportItemList extends StatelessWidget {
   final List<_ItemData> items;
-  const _ImportItemList({required this.items});
+  final String layerId;
+  final String fileId;
+  final String? focusId;
+
+  const _ImportItemList({required this.items, required this.layerId, required this.fileId, this.focusId});
 
   @override
   Widget build(BuildContext context) {
@@ -554,17 +643,26 @@ class _ImportItemList extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 4),
       itemBuilder: (_, i) {
         final item = items[i];
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(6)),
-          child: Row(children: [
-            Container(width: 8, height: 8, decoration: BoxDecoration(color: item.color, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(item.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
-              Text(item.subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-            ])),
-          ]),
+        final isFocused = focusId == item.id;
+        return GestureDetector(
+          onTap: () => _highlightAndPop(context, item.id, item.type, fileId: fileId),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: isFocused ? AppColors.accent.withOpacity(0.15) : AppColors.background,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: isFocused ? AppColors.accent : Colors.transparent),
+            ),
+            child: Row(children: [
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: item.color, shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(item.name, style: TextStyle(color: isFocused ? AppColors.accent : AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(item.subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+              ])),
+              const Icon(Icons.location_searching, color: AppColors.accent, size: 14),
+            ]),
+          ),
         );
       },
     );
@@ -577,12 +675,13 @@ class _ItemCard extends StatelessWidget {
   final String name, subtitle;
   final Color color;
   final DateTime timestamp;
+  final bool isFocused;
   final VoidCallback onTap;
   final Function(String) onRename;
   final Function(Color) onColorChange;
   final VoidCallback onDelete;
 
-  const _ItemCard({required this.name, required this.subtitle, required this.color, required this.timestamp, required this.onTap, required this.onRename, required this.onColorChange, required this.onDelete});
+  const _ItemCard({required this.name, required this.subtitle, required this.color, required this.timestamp, required this.onTap, required this.onRename, required this.onColorChange, required this.onDelete, this.isFocused = false});
 
   @override
   Widget build(BuildContext context) {
@@ -590,13 +689,17 @@ class _ItemCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider)),
+        decoration: BoxDecoration(
+          color: isFocused ? AppColors.primary.withOpacity(0.1) : AppColors.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isFocused ? AppColors.primary : AppColors.divider, width: isFocused ? 2 : 1),
+        ),
         child: Row(
           children: [
             Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(name, style: TextStyle(color: isFocused ? AppColors.primary : AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
               Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
               Text(_formatTs(timestamp), style: const TextStyle(color: AppColors.textSecondary, fontSize: 9)),
             ])),
