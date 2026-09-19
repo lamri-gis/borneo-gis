@@ -14,7 +14,7 @@ class AppColors {
   static const divider = Color(0xFF2E3E2E);
   static const gridLine = Color(0xFFCCCCCC);   // grid hitam tipis di peta putih
   static const mapBackground = Color(0xFFFFFFFF); // background peta putih
-  static const crosshair = Color(0xFF00E5FF);
+  static const crosshair = Color(0xFF000000);
   static const trackLine = Color(0xFF00C853);
   static const pinColor = Color(0xFFFF5252);
   static const radiusLine = Color(0xFF00C853);
