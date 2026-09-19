@@ -131,8 +131,9 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   }),
 
-                  // Kompas
-                  Positioned(top: 12, right: 12, child: CompassWidget(heading: gps.heading)),
+                  // Kompas -- hanya tampil kalau HP punya sensor
+                  if (gps.hasCompass)
+                    Positioned(top: 12, right: 12, child: CompassWidget(heading: gps.heading)),
 
                   // Track recording indicator
                   if (layer.isRecording)
