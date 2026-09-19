@@ -234,8 +234,8 @@ class _MainScreenState extends State<MainScreen> {
         return true;
       },
       child: Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
         child: Column(
           children: [
             _buildAppBar(context, gps, layer),
@@ -322,8 +322,7 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
       ),
-    ); // Scaffold
-    }, // WillPopScope child
+      ), // Scaffold
     ); // WillPopScope
   }
 
