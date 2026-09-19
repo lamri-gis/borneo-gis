@@ -41,39 +41,157 @@ class _MainScreenState extends State<MainScreen> {
 
   void _checkLayerOnStart() {
     final layer = context.read<LayerProvider>();
-    if (layer.layers.isEmpty && !_layerDialogShown) {
-      _layerDialogShown = true;
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) _showNoLayerDialog();
-      });
-    }
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      if (layer.layers.isEmpty && !_layerDialogShown) {
+        _layerDialogShown = true;
+        _showCreateRadiusDialog();
+      } else if (layer.layers.isNotEmpty && !_layerDialogShown) {
+        _layerDialogShown = true;
+        _showLayerPickerSheet();
+      }
+    });
   }
 
-  void _showNoLayerDialog() {
-    showDialog(
+  void _showLayerPickerSheet() {
+    final layer = context.read<LayerProvider>();
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: const Text('Belum ada Layer', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: const Text('Buat layer baru untuk mulai pasang pin, rekam track, buat line dan poligon.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Nanti'),
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Pilih Layer', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
           ),
-          ElevatedButton(
-            onPressed: () {
+          const Divider(height: 1, color: AppColors.divider),
+          ...layer.layers.map((l) => ListTile(
+            leading: Container(width: 12, height: 12, decoration: BoxDecoration(color: l.color, shape: BoxShape.circle)),
+            title: Text(l.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            subtitle: Text('${_radiusLabel(l.radius)}  •  ${l.pins.length} pin  •  ${l.tracks.length} track', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            onTap: () {
+              layer.setActiveLayer(l);
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => RadiusCreateScreen(mapController: _mapController)));
+              // Zoom fit ke radius layer
+              _mapController.zoomFitToCoords([LatLon(l.latitude, l.longitude)]);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
-            child: const Text('Buat Layer'),
+          )),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () { Navigator.pop(context); _showCreateRadiusDialog(); },
+                icon: const Icon(Icons.add, color: AppColors.primary),
+                label: const Text('Buat Layer Baru', style: TextStyle(color: AppColors.primary)),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.primary)),
+              ),
+            ),
           ),
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
+
+  void _showCreateRadiusDialog() {
+    final gps = context.read<GpsProvider>();
+    final layer = context.read<LayerProvider>();
+    final nameCtrl = TextEditingController();
+    double radius = 100;
+    Color color = LayerColors.options[1];
+    final radiusOptions = [50, 100, 200, 500, 1000, 2000, 5000];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text('Buat Layer Baru', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Layer (opsional)',
+                    hintText: 'Contoh: GUNUNG MAS',
+                    hintStyle: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Radius', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8, runSpacing: 8,
+                  children: radiusOptions.map((r) {
+                    final selected = radius == r;
+                    return GestureDetector(
+                      onTap: () => setS(() => radius = r.toDouble()),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: selected ? AppColors.primary : AppColors.background,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: selected ? AppColors.primary : AppColors.divider),
+                        ),
+                        child: Text(_radiusLabel(r.toDouble()), style: TextStyle(color: selected ? Colors.black : AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                const Text('Warna', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Row(
+                  children: LayerColors.options.map((c) => GestureDetector(
+                    onTap: () => setS(() => color = c),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: color == c ? AppColors.primary : AppColors.divider, width: color == c ? 3 : 1)),
+                      child: color == c ? const Icon(Icons.check, size: 14, color: Colors.black) : null,
+                    ),
+                  )).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (layer.layers.isNotEmpty)
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: () {
+                final coord = _mapController.getCrosshairCoord();
+                final lat = coord?.latitude ?? gps.current?.latitude ?? 0;
+                final lon = coord?.longitude ?? gps.current?.longitude ?? 0;
+                final now = DateTime.now();
+                final autoIndex = layer.todayLayerAutoIndex(now);
+                final name = defaultLayerName(now, nameCtrl.text, autoIndex);
+                final newLayer = FieldLayer(name: name, latitude: lat, longitude: lon, radius: radius, color: color);
+                layer.addLayer(newLayer);
+                Navigator.pop(context);
+                _mapController.zoomFitToCoords([LatLon(lat, lon)]);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+              child: const Text('Buat Layer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _radiusLabel(double r) => r >= 1000 ? '${(r/1000).toStringAsFixed(0)} km' : '${r.toInt()} m';
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +209,31 @@ class _MainScreenState extends State<MainScreen> {
       });
     }
 
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        if (layer.isRecording) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              backgroundColor: AppColors.card,
+              title: const Text('Track Sedang Direkam', style: TextStyle(color: AppColors.textPrimary)),
+              content: const Text('Track akan disimpan otomatis. Yakin mau keluar?', style: TextStyle(color: AppColors.textSecondary)),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                  child: const Text('Keluar & Simpan', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          if (confirm == true) await layer.autoSaveTrack();
+          return confirm ?? false;
+        }
+        return true;
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -180,7 +322,9 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
       ),
-    );
+    ); // Scaffold
+    }, // WillPopScope child
+    ); // WillPopScope
   }
 
   Widget _buildAppBar(BuildContext context, GpsProvider gps, LayerProvider layer) {
@@ -220,7 +364,7 @@ class _MainScreenState extends State<MainScreen> {
   void _addPinFromCrosshair(BuildContext context) {
     final layer = context.read<LayerProvider>();
     if (layer.activeLayer == null) {
-      _showNoLayerDialog();
+      _showCreateRadiusDialog();
       return;
     }
     final coord = _mapController.getCrosshairCoord();
@@ -233,7 +377,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _showPinDialog(BuildContext context, double lat, double lon) {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
+    if (layer.activeLayer == null) { _showCreateRadiusDialog(); return; }
 
     if (!layer.activeLayer!.containsPoint(lat, lon)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -366,7 +510,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _toggleTrack(BuildContext context, LayerProvider layer) {
-    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
+    if (layer.activeLayer == null) { _showCreateRadiusDialog(); return; }
     if (layer.isRecording) {
       layer.stopRecording();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Track disimpan')));
@@ -377,14 +521,14 @@ class _MainScreenState extends State<MainScreen> {
 
   void _startDrawing(DrawingMode mode) {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
+    if (layer.activeLayer == null) { _showCreateRadiusDialog(); return; }
     setState(() => _drawingMode = mode);
     _mapController.setDrawingMode(mode);
   }
 
   void _startPolygon(BuildContext context) {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
+    if (layer.activeLayer == null) { _showCreateRadiusDialog(); return; }
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -409,7 +553,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _importFile(BuildContext context) async {
     final layer = context.read<LayerProvider>();
-    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
+    if (layer.activeLayer == null) { _showCreateRadiusDialog(); return; }
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['kml', 'KML']);
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
@@ -424,7 +568,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showExport(BuildContext context, LayerProvider layer) {
-    if (layer.activeLayer == null) { _showNoLayerDialog(); return; }
+    if (layer.activeLayer == null) { _showCreateRadiusDialog(); return; }
     Navigator.push(context, MaterialPageRoute(builder: (_) => LayerDetailScreen(layerId: layer.activeLayer!.id)));
   }
 
