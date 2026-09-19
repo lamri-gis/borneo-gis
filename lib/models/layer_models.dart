@@ -104,7 +104,7 @@ class LayerTrack {
   final List<LayerTrackPoint> points;
   bool isRecording;
 
-  LayerTrack({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF00C853), List<LayerTrackPoint>? points, this.isRecording=false})
+  LayerTrack({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF1565C0), List<LayerTrackPoint>? points, this.isRecording=false})
       : id=id??_uuid.v4(), createdAt=createdAt??DateTime.now(), points=points??[], name='' {
     this.name = name ?? defaultName('track', this.createdAt);
   }
@@ -133,7 +133,7 @@ class LayerPin {
   final double longitude;
   final double altitude;
 
-  LayerPin({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFFFF5252), required this.latitude, required this.longitude, this.altitude=0})
+  LayerPin({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF000000), required this.latitude, required this.longitude, this.altitude=0})
       : id=id??_uuid.v4(), createdAt=createdAt??DateTime.now(), name='' {
     this.name = name ?? defaultName('pin', this.createdAt);
   }
@@ -149,7 +149,7 @@ class LayerLine {
   Color color;
   final List<LinePoint> points;
 
-  LayerLine({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF2196F3), List<LinePoint>? points})
+  LayerLine({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF1565C0), List<LinePoint>? points})
       : id=id??_uuid.v4(), createdAt=createdAt??DateTime.now(), points=points??[], name='' {
     this.name = name ?? defaultName('line', this.createdAt);
   }
@@ -169,7 +169,7 @@ class LayerPolygon {
   final List<LinePoint> points;
   AreaUnit areaUnit; // ha atau m²
 
-  LayerPolygon({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF9C27B0), List<LinePoint>? points, this.areaUnit=AreaUnit.hectare})
+  LayerPolygon({String? id, String? name, DateTime? createdAt, this.color=const Color(0xFF1565C0), List<LinePoint>? points, this.areaUnit=AreaUnit.hectare})
       : id=id??_uuid.v4(), createdAt=createdAt??DateTime.now(), points=points??[], name='' {
     this.name = name ?? defaultName('poly', this.createdAt);
   }
