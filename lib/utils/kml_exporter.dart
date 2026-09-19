@@ -1,15 +1,22 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/layer_models.dart';
 
 enum ExportSource { original, import_ }
 enum ExportType { all, track, pin, line, polygon }
+enum ExportMethod { save, share }
 
 class KmlExporter {
   static Future<String?> exportOriginal({
     required FieldLayer layer,
     required ExportType type,
     required String fileName,
+    required ExportMethod method,
+    required BuildContext context,
   }) async {
     final buf = StringBuffer();
     _writeHeader(buf, fileName);
@@ -28,13 +35,15 @@ class KmlExporter {
     }
 
     _writeFooter(buf);
-    return _saveFile(fileName, buf.toString());
+    return _handleExport(fileName, buf.toString(), method, context);
   }
 
   static Future<String?> exportImport({
     required ImportedFile importedFile,
     required ExportType type,
     required String fileName,
+    required ExportMethod method,
+    required BuildContext context,
   }) async {
     final buf = StringBuffer();
     _writeHeader(buf, fileName);
@@ -53,22 +62,55 @@ class KmlExporter {
     }
 
     _writeFooter(buf);
-    return _saveFile(fileName, buf.toString());
+    return _handleExport(fileName, buf.toString(), method, context);
   }
 
-  // Pilih folder dan simpan file
-  static Future<String?> _saveFile(String fileName, String content) async {
+  static Future<String?> _handleExport(String fileName, String content, ExportMethod method, BuildContext context) async {
+    final safeName = fileName.trim().isEmpty ? 'export' : fileName.trim();
+    final kmlName = safeName.endsWith('.kml') ? safeName : '$safeName.kml';
+
+    if (method == ExportMethod.share) {
+      return _shareFile(kmlName, content);
+    } else {
+      return _saveToStorage(kmlName, content, context);
+    }
+  }
+
+  // Share via Android share sheet
+  static Future<String?> _shareFile(String fileName, String content) async {
     try {
-      // Minta user pilih folder
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsString(content, flush: true);
+      await Share.shareXFiles([XFile(tempFile.path)], text: fileName);
+      return 'shared';
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Simpan ke storage dengan permission handling
+  static Future<String?> _saveToStorage(String fileName, String content, BuildContext context) async {
+    try {
+      // Android 11+ -- request MANAGE_EXTERNAL_STORAGE
+      if (Platform.isAndroid) {
+        final status = await Permission.manageExternalStorage.status;
+        if (!status.isGranted) {
+          final result = await Permission.manageExternalStorage.request();
+          if (!result.isGranted) {
+            // Fallback ke storage biasa
+            final storageStatus = await Permission.storage.request();
+            if (!storageStatus.isGranted) return null;
+          }
+        }
+      }
+
       final dirPath = await FilePicker.platform.getDirectoryPath(
         dialogTitle: 'Pilih folder penyimpanan',
       );
       if (dirPath == null) return null;
 
-      final name = fileName.trim().isEmpty ? 'export' : fileName.trim();
-      final safeName = name.endsWith('.kml') ? name : '$name.kml';
-      final path = '$dirPath/$safeName';
-
+      final path = '$dirPath/$fileName';
       final file = File(path);
       await file.writeAsString(content, flush: true);
       return path;
