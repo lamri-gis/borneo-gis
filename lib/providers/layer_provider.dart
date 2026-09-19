@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/layer_models.dart';
 
@@ -18,6 +17,7 @@ class LayerProvider extends ChangeNotifier {
   LayerTrack? _recordingTrack;
   HighlightState? _highlight;
   AreaUnit _pendingPolygonUnit = AreaUnit.hectare;
+  String? _highlightedFileId; // untuk highlight nama file import
 
   List<FieldLayer> get layers => _layers;
   FieldLayer? get activeLayer => _activeLayer;
@@ -25,22 +25,29 @@ class LayerProvider extends ChangeNotifier {
   bool get isRecording => _recordingTrack != null;
   HighlightState? get highlight => _highlight;
   AreaUnit get pendingPolygonUnit => _pendingPolygonUnit;
+  String? get highlightedFileId => _highlightedFileId;
 
   void setPendingPolygonUnit(AreaUnit unit) {
     _pendingPolygonUnit = unit;
   }
 
-  LayerProvider() { _load(); }
+  void setHighlightWithFile(String id, HighlightType type, {String? fileId}) {
+    _highlight = HighlightState(id: id, type: type);
+    _highlightedFileId = fileId;
+    notifyListeners();
+  }
 
-  // ── HIGHLIGHT ──────────────────────────────────────
+  LayerProvider() { _load(); }
 
   void setHighlight(String id, HighlightType type) {
     _highlight = HighlightState(id: id, type: type);
+    _highlightedFileId = null;
     notifyListeners();
   }
 
   void clearHighlight() {
     _highlight = null;
+    _highlightedFileId = null;
     notifyListeners();
   }
 
