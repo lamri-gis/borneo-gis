@@ -1,6 +1,6 @@
 name: borneogis_navigator
 description: BorneoGIS Navigator - Field mapping app by Lamri.
-version: 1.0.3+4
+version: 1.0.4+5
 publish_to: none
 
 environment:
@@ -20,6 +20,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   xml: ^6.5.0
   uuid: ^4.4.0
+  share_plus: ^10.0.0
 
 dev_dependencies:
   flutter_test:
