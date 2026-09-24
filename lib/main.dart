@@ -25,10 +25,16 @@ class BorneoGISNavigator extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => GpsProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => TrackProvider()),
         ChangeNotifierProvider(create: (_) => LayerProvider()),
+        ChangeNotifierProxyProvider<LayerProvider, GpsProvider>(
+          create: (_) => GpsProvider(),
+          update: (_, layerProvider, gpsProvider) {
+            gpsProvider!.setLayerProvider(layerProvider);
+            return gpsProvider;
+          },
+        ),
       ],
       child: MaterialApp(
         title: 'BorneoGIS Navigator',
