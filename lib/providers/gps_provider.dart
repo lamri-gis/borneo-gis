@@ -3,10 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../models/gps_data.dart';
+import '../models/layer_models.dart';
+import '../providers/layer_provider.dart';
 
 class GpsProvider extends ChangeNotifier {
   StreamSubscription<Position>? _locationSub;
   StreamSubscription? _compassSub;
+  LayerProvider? _layerProvider;
 
   GpsData? _current;
   GpsData? _firstFix;
@@ -24,6 +27,11 @@ class GpsProvider extends ChangeNotifier {
   bool get hasPosition => _current != null;
   bool get hasCompass => _hasCompass;
   String? get errorMessage => _errorMessage;
+
+  // Set LayerProvider untuk addTrackPoint langsung dari GPS stream
+  void setLayerProvider(LayerProvider lp) {
+    _layerProvider = lp;
+  }
 
   Future<void> start() async {
     try {
@@ -74,10 +82,27 @@ class GpsProvider extends ChangeNotifier {
         _firstFix ??= data;
         _isActive = true;
         _errorMessage = null;
+
+        // Rekam track langsung dari GPS stream -- bukan dari widget build()
+        if (_layerProvider != null && _layerProvider!.isRecording) {
+          _layerProvider!.addTrackPoint(LayerTrackPoint(
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            altitude: pos.altitude,
+            accuracy: pos.accuracy,
+            timestamp: pos.timestamp,
+          ));
+        }
+
+        notifyListeners();
+      }, onError: (e) {
+        // GPS mati/error -- auto save track
+        _isActive = false;
+        _layerProvider?.autoSaveTrack();
         notifyListeners();
       });
 
-      // Subscribe kompas dulu
+      // Subscribe kompas
       _compassSub = FlutterCompass.events?.listen((event) {
         if (event.heading != null) {
           if (!_hasCompass) {
@@ -89,7 +114,6 @@ class GpsProvider extends ChangeNotifier {
         }
       });
 
-      // Tunggu 2 detik -- kalau belum detect kompas, cancel subscription
       await Future.delayed(const Duration(seconds: 2));
       if (!_hasCompass) {
         _compassSub?.cancel();
@@ -97,6 +121,7 @@ class GpsProvider extends ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = 'Error GPS: $e';
+      _layerProvider?.autoSaveTrack();
       notifyListeners();
     }
   }
