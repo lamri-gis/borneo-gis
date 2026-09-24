@@ -82,10 +82,11 @@ class LayerTrackPoint {
   final double latitude;
   final double longitude;
   final double altitude;
+  final double accuracy;
   final DateTime timestamp;
-  const LayerTrackPoint({required this.latitude, required this.longitude, this.altitude=0, required this.timestamp});
-  Map<String,dynamic> toJson() => {'lat':latitude,'lon':longitude,'alt':altitude,'ts':timestamp.toIso8601String()};
-  factory LayerTrackPoint.fromJson(Map<String,dynamic> j) => LayerTrackPoint(latitude:j['lat'],longitude:j['lon'],altitude:j['alt']??0,timestamp:DateTime.parse(j['ts']));
+  const LayerTrackPoint({required this.latitude, required this.longitude, this.altitude=0, this.accuracy=0, required this.timestamp});
+  Map<String,dynamic> toJson() => {'lat':latitude,'lon':longitude,'alt':altitude,'acc':accuracy,'ts':timestamp.toIso8601String()};
+  factory LayerTrackPoint.fromJson(Map<String,dynamic> j) => LayerTrackPoint(latitude:j['lat'],longitude:j['lon'],altitude:j['alt']??0,accuracy:j['acc']??0,timestamp:DateTime.parse(j['ts']));
 }
 
 class LinePoint {
