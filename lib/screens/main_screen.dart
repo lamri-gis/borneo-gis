@@ -198,17 +198,6 @@ class _MainScreenState extends State<MainScreen> {
     final gps = context.watch<GpsProvider>();
     final layer = context.watch<LayerProvider>();
 
-    if (layer.isRecording && gps.current != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        layer.addTrackPoint(LayerTrackPoint(
-          latitude: gps.current!.latitude,
-          longitude: gps.current!.longitude,
-          altitude: gps.current!.altitude,
-          timestamp: gps.current!.timestamp,
-        ));
-      });
-    }
-
     return WillPopScope(
       onWillPop: () async {
         if (layer.isRecording) {
