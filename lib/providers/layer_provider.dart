@@ -203,8 +203,52 @@ class LayerProvider extends ChangeNotifier {
 
   void addTrackPoint(LayerTrackPoint point) {
     if (_recordingTrack == null) return;
+
+    // Filter 1 -- Accuracy filter: skip kalau akurasi > 15 meter
+    if (point.accuracy > 15 && point.accuracy > 0) return;
+
+    final points = _recordingTrack!.points;
+
+    if (points.isNotEmpty) {
+      final last = points.last;
+
+      // Filter 2 -- Distance filter: skip kalau jarak < 2 meter
+      final dist = _haversinePoint(last, point);
+      if (dist < 2.0) return;
+
+      // Filter 3 -- Speed filter: skip kalau kecepatan > 50 km/h (tidak masuk akal jalan kaki)
+      final timeDiff = point.timestamp.difference(last.timestamp).inMilliseconds / 1000.0;
+      if (timeDiff > 0) {
+        final speedMs = dist / timeDiff;
+        final speedKmh = speedMs * 3.6;
+        if (speedKmh > 50) return;
+      }
+    }
+
     _recordingTrack!.points.add(point);
     notifyListeners();
+  }
+
+  static double _haversinePoint(LayerTrackPoint a, LayerTrackPoint b) {
+    const R = 6371000.0;
+    const pi = 3.14159265358979;
+    final lat1 = a.latitude * pi / 180;
+    final lat2 = b.latitude * pi / 180;
+    final dLat = (b.latitude - a.latitude) * pi / 180;
+    final dLon = (b.longitude - a.longitude) * pi / 180;
+    final sa = _sin2(dLat/2) + _cos(lat1) * _cos(lat2) * _sin2(dLon/2);
+    return R * 2 * _atan2(sa);
+  }
+
+  static double _sin2(double x) { final s = _sin(x); return s * s; }
+  static double _sin(double x) => x - x*x*x/6 + x*x*x*x*x/120;
+  static double _cos(double x) => 1 - x*x/2 + x*x*x*x/24;
+  static double _atan2(double a) { return 2 * (a < 0.5 ? _sqrt(a) : 3.14159265358979/2 - _sqrt(1-a)); }
+  static double _sqrt(double x) {
+    if (x <= 0) return 0;
+    double r = x;
+    for (int i = 0; i < 10; i++) r = (r + x/r) / 2;
+    return r;
   }
 
   Future<void> stopRecording() async {
