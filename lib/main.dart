@@ -28,20 +28,40 @@ class BorneoGISNavigator extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => TrackProvider()),
         ChangeNotifierProvider(create: (_) => LayerProvider()),
-        ChangeNotifierProxyProvider<LayerProvider, GpsProvider>(
-          create: (_) => GpsProvider(),
-          update: (_, layerProvider, gpsProvider) {
-            gpsProvider!.setLayerProvider(layerProvider);
-            return gpsProvider;
-          },
-        ),
+        ChangeNotifierProvider(create: (_) => GpsProvider()),
       ],
-      child: MaterialApp(
-        title: 'BorneoGIS Navigator',
-        theme: AppTheme.dark,
-        home: const MainScreen(),
-        debugShowCheckedModeBanner: false,
-      ),
+      child: const _AppInit(),
+    );
+  }
+}
+
+// Inisialisasi setelah semua provider tersedia
+class _AppInit extends StatefulWidget {
+  const _AppInit();
+
+  @override
+  State<_AppInit> createState() => _AppInitState();
+}
+
+class _AppInitState extends State<_AppInit> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final gps = context.read<GpsProvider>();
+      final layer = context.read<LayerProvider>();
+      // Set LayerProvider sekali saja -- tidak pakai proxy
+      gps.setLayerProvider(layer);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'BorneoGIS Navigator',
+      theme: AppTheme.dark,
+      home: const MainScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
