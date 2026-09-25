@@ -17,6 +17,7 @@ class LayerProvider extends ChangeNotifier {
   List<FieldLayer> _layers = [];
   FieldLayer? _activeLayer;
   LayerTrack? _recordingTrack;
+  String? _recordingLayerId; // simpan layerId saat start recording
   HighlightState? _highlight;
   AreaUnit _pendingPolygonUnit = AreaUnit.hectare;
   String? _highlightedFileId; // untuk highlight nama file import
@@ -171,6 +172,7 @@ class LayerProvider extends ChangeNotifier {
   void startRecording(String? name) {
     if (_activeLayer == null) return;
     final now = DateTime.now();
+    _recordingLayerId = _activeLayer!.id;
     _recordingTrack = LayerTrack(
       name: name ?? defaultName('track', now),
       isRecording: true,
@@ -252,22 +254,42 @@ class LayerProvider extends ChangeNotifier {
   }
 
   Future<void> stopRecording() async {
-    if (_recordingTrack == null || _activeLayer == null) return;
+    if (_recordingTrack == null) return;
     _recordingTrack!.isRecording = false;
-    _activeLayer!.tracks.add(_recordingTrack!);
+    // Cari layer berdasarkan _recordingLayerId, bukan _activeLayer
+    final layerId = _recordingLayerId;
+    if (layerId != null) {
+      try {
+        final layer = _layers.firstWhere((l) => l.id == layerId);
+        if (_recordingTrack!.points.isNotEmpty) {
+          layer.tracks.add(_recordingTrack!);
+        }
+      } catch (_) {}
+    }
     _recordingTrack = null;
+    _recordingLayerId = null;
     FlutterForegroundTask.stopService();
     await _save();
     notifyListeners();
   }
 
-  // Auto-save saat GPS mati atau HP mati -- dipanggil dari GpsProvider
   Future<void> autoSaveTrack() async {
-    if (_recordingTrack == null || _activeLayer == null) return;
-    if (_recordingTrack!.points.isEmpty) return;
+    if (_recordingTrack == null) return;
+    if (_recordingTrack!.points.isEmpty) {
+      _recordingTrack = null;
+      _recordingLayerId = null;
+      return;
+    }
     _recordingTrack!.isRecording = false;
-    _activeLayer!.tracks.add(_recordingTrack!);
+    final layerId = _recordingLayerId;
+    if (layerId != null) {
+      try {
+        final layer = _layers.firstWhere((l) => l.id == layerId);
+        layer.tracks.add(_recordingTrack!);
+      } catch (_) {}
+    }
     _recordingTrack = null;
+    _recordingLayerId = null;
     FlutterForegroundTask.stopService();
     await _save();
     notifyListeners();
